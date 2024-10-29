@@ -8,6 +8,15 @@ const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/res
 const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/drive.appdata';
 const MAX_PHOTOS = 30;
 
+const isDev = window.location.hostname === 'localhost' || window.location.hostname.includes('192.168');
+if (isDev) {
+    console.log('Running in development mode');
+    console.log('Access URLs:', {
+        local: 'http://localhost:5173',
+        network: `http://${window.location.hostname}:5173`
+    });
+}
+
 const challenges = [
     {
         id: 1,
