@@ -1,5 +1,5 @@
 import React, {useState, useEffect} from 'react';
-import {CheckCircle, Upload, X, AlertCircle, Settings, LogIn } from 'lucide-react';
+import {CheckCircle, Upload, X, AlertCircle, Settings, LogIn, ChevronDown  } from 'lucide-react';
 
 const API_URL = 'http://slyrix.com:3001/api';
 
@@ -18,18 +18,18 @@ if (isDev) {
 const challenges = [
     {
         id: 1,
+        title: 'Catch the Groom',
+        description: 'Take a fun picture with Rushel and Sivani'
+    },
+    {
+        id: 2,
         title: 'Best Outfit of the Day',
         description: 'Capture the most stylish guest!'
     },
     {
-        id: 2,
-        title: 'Catch the Groom',
-        description: 'Take a fun picture with the groom'
-    },
-    {
         id: 3,
-        title: 'Dance Floor Moments',
-        description: 'Capture the best dance moves'
+        title: 'Take a selfie',
+        description: 'Click a selfie'
     },
     {
         id: 4,
@@ -39,6 +39,7 @@ const challenges = [
 ];
 
 function App() {
+    const [expandedChallenges, setExpandedChallenges] = useState(new Set());
     const [challengePhotos, setChallengePhotos] = useState({});
     const [notification, setNotification] = useState(null);
     const [guestName, setGuestName] = useState('');
@@ -59,11 +60,16 @@ function App() {
     const [challengeUploadProgress, setChallengeUploadProgress] = useState({});
     const [failedImages, setFailedImages] = useState(new Set()); // Add this state at the top with other states
     const [imageErrors, setImageErrors] = useState({});
+    const [selectedImage, setSelectedImage] = useState(null);
 
 
     useEffect(() => {
         if (isLoggedIn) {
             fetchPhotos();
+            // Fetch photos for all challenges
+            challenges.forEach(challenge => {
+                fetchChallengePhotos(challenge.id);
+            });
         }
     }, [isLoggedIn]);
 
@@ -117,6 +123,31 @@ function App() {
             initialProgress[file.name] = 0;
         });
         setUploadProgress(initialProgress);
+    };
+    const ImageModal = ({ image, onClose }) => {
+        if (!image) return null;
+
+        return (
+            <div
+                className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+                onClick={onClose}
+            >
+                <div className="max-w-[90vw] max-h-[90vh]">
+                    <img
+                        src={image}
+                        alt="Full size"
+                        className="max-w-full max-h-[90vh] object-contain"
+                        onClick={e => e.stopPropagation()}
+                    />
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 text-white hover:text-gray-300"
+                    >
+                        <X className="w-8 h-8" />
+                    </button>
+                </div>
+            </div>
+        );
     };
 
     const removeFile = (fileName) => {
@@ -254,6 +285,17 @@ function App() {
         setUploadProgress({...uploadProgress, challenge: 0});
     };
 
+    const toggleChallenge = (challengeId) => {
+        setExpandedChallenges(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(challengeId)) {
+                newSet.delete(challengeId);
+            } else {
+                newSet.add(challengeId);
+            }
+            return newSet;
+        });
+    };
     const uploadChallengeFile = async (file, challengeId) => {
         if (!file) return;
 
@@ -356,6 +398,10 @@ function App() {
             setActiveChallenge(null);
         }
     };
+    useEffect(() => {
+        const userAgent = navigator.userAgent;
+        setDeviceInfo(`${getBrowserInfo(userAgent)} on ${getDeviceInfo(userAgent, navigator.platform)} (${/Mobile|Android|iPhone|iPad|iPod/i.test(userAgent) ? 'Mobile' : 'Desktop'})`);
+    }, []);
 
     useEffect(() => {
         // Load device info only
@@ -452,7 +498,12 @@ function App() {
             setIsLoggedIn(true);
             const savedChallenges = localStorage.getItem(`completedChallenges_${guestName}`);
             if (savedChallenges) {
-                setCompletedChallenges(new Set(JSON.parse(savedChallenges)));
+                const completedIds = JSON.parse(savedChallenges);
+                setCompletedChallenges(new Set(completedIds));
+                // Fetch photos for completed challenges
+                completedIds.forEach(id => {
+                    fetchChallengePhotos(id);
+                });
             }
         }
     };
@@ -558,7 +609,7 @@ function App() {
             )}
             <div className="text-center">
                 <h1 className="text-4xl font-serif text-wedding-purple-dark mb-2 relative inline-block">
-                    Wedding Photo Gallery
+                    Engagement Photo Gallery
                     <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
                     <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
                     <div className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
@@ -798,6 +849,40 @@ function App() {
                                 </button>
                             </div>
                         )}
+
+                        {/* Challenge Photos Gallery */}
+                        {challengePhotos[challenge.id] && challengePhotos[challenge.id].length > 0 && (
+                            <div className="mt-6">
+                                <button
+                                    onClick={() => toggleChallenge(challenge.id)}
+                                    className="w-full flex justify-between items-center text-lg font-medium text-wedding-purple-dark p-2 hover:bg-wedding-green-light/10 rounded"
+                                >
+                                    <span>Challenge Photos ({challengePhotos[challenge.id].length})</span>
+                                    <ChevronDown
+                                        className={`transform transition-transform ${
+                                            expandedChallenges.has(challenge.id) ? 'rotate-180' : ''
+                                        }`}
+                                    />
+                                </button>
+                                {expandedChallenges.has(challenge.id) && (
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
+                                        {challengePhotos[challenge.id].map((photo) => (
+                                            <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
+                                                <img
+                                                    src={`${API_URL}/uploads/${photo.filename}`}
+                                                    alt={`Photo by ${photo.uploadedBy}`}
+                                                    className="w-full h-[200px] object-contain rounded"
+                                                    onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
+                                                />
+                                                <p className="text-sm mt-1 text-wedding-purple">
+                                                    By: {photo.uploadedBy}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
@@ -809,7 +894,6 @@ function App() {
             return `${API_URL}/uploads/${filename}`;
         };
 
-        // Update this line to ensure we show the correct photos
         const photosToDisplay = isAdmin ? allPhotos : photos.filter(photo => {
             let metadata;
             try {
@@ -838,16 +922,6 @@ function App() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {photosToDisplay.map((photo) => {
-                            let metadata;
-                            try {
-                                metadata = typeof photo.description === 'string'
-                                    ? JSON.parse(photo.description)
-                                    : photo.description || {};
-                            } catch (e) {
-                                console.error('Error parsing metadata:', e);
-                                metadata = {};
-                            }
-
                             const imageUrl = getImageUrl(photo.filename);
 
                             return (
@@ -855,8 +929,9 @@ function App() {
                                     <div className="relative">
                                         <img
                                             src={imageUrl}
-                                            alt={`Photo by ${metadata.uploadedBy || 'Unknown Guest'}`}
-                                            className="w-full h-48 object-cover rounded mb-2"
+                                            alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
+                                            className="w-full h-48 object-cover rounded mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                                            onClick={() => setSelectedImage(imageUrl)}
                                             onError={(e) => {
                                                 console.error('Image load error:', imageUrl);
                                                 setImageErrors(prev => ({
@@ -869,14 +944,15 @@ function App() {
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-sm font-medium">
-                                            By: {metadata.uploadedBy || photo.uploadedBy || 'Unknown Guest'}
+                                            By: {photo.uploadedBy || 'Unknown Guest'}
                                         </p>
                                         <p className="text-sm text-gray-600">
-                                            {metadata.uploadType || photo.uploadType || 'General'}
+                                            {photo.uploadType || 'General'}
+                                            {photo.challengeInfo && ` - ${photo.challengeInfo}`}
                                         </p>
-                                        {metadata.deviceInfo && (
+                                        {isAdmin && photo.deviceInfo && (
                                             <p className="text-xs text-gray-500">
-                                                Device: {metadata.deviceInfo}
+                                                Uploaded from: {photo.deviceInfo}
                                             </p>
                                         )}
                                         <a
@@ -898,10 +974,11 @@ function App() {
     };
     if (!isLoggedIn) {
         return (
-            <div className="min-h-screen bg-wedding-accent-light flex items-center justify-center bg-[url('/paisley-pattern.png')] bg-opacity-5">
+            <div
+                className="min-h-screen bg-wedding-accent-light flex items-center justify-center bg-[url('/paisley-pattern.png')] bg-opacity-5">
                 <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full border-2 border-wedding-purple">
                     <h1 className="text-3xl font-serif text-center mb-6 text-wedding-purple-dark">
-                        Welcome to Our Wedding Celebration
+                        Welcome to Rushel and Sivani's Engagement Celebration
                     </h1>
                     <form onSubmit={handleLogin} className="space-y-4">
                         <input
@@ -955,12 +1032,18 @@ function App() {
                             </button>
                         </div>
 
-                        {selectedTab === 'general' && renderGeneralUpload()}
+                        {selectedTab === 'general' && (
+                            <>
+                                {renderGeneralUpload()}
+                                {renderPhotoGallery()}
+                            </>
+                        )}
                         {selectedTab === 'challenges' && renderChallenges()}
                     </>
                 )}
 
-                {renderPhotoGallery()}
+                {/* Show gallery for admin regardless of tab */}
+                {isAdmin && renderPhotoGallery()}
             </div>
 
             {showAdminModal && renderAdminModal()}
@@ -969,6 +1052,12 @@ function App() {
                     message={notification.message}
                     type={notification.type}
                     onClose={() => setNotification(null)}
+                />
+            )}
+            {selectedImage && (
+                <ImageModal
+                    image={selectedImage}
+                    onClose={() => setSelectedImage(null)}
                 />
             )}
         </div>
