@@ -1,5 +1,15 @@
 import React, {useState, useEffect} from 'react';
-import {CheckCircle, Upload, X, AlertCircle, Settings, LogIn, ChevronDown  } from 'lucide-react';
+import {
+    CheckCircle,
+    Upload,
+    X,
+    AlertCircle,
+    Settings,
+    LogIn,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight
+} from 'lucide-react';
 
 const API_URL = 'http://slyrix.com:3001/api';
 
@@ -39,6 +49,7 @@ const challenges = [
 ];
 
 function App() {
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [expandedChallenges, setExpandedChallenges] = useState(new Set());
     const [challengePhotos, setChallengePhotos] = useState({});
     const [notification, setNotification] = useState(null);
@@ -124,15 +135,39 @@ function App() {
         });
         setUploadProgress(initialProgress);
     };
-    const ImageModal = ({ image, onClose }) => {
+    const ImageModal = ({image, onClose}) => {
         if (!image) return null;
+
+        // Determine if we're viewing challenge photos or regular gallery
+        const isChallengeView = selectedTab === 'challenges';
+        const currentChallengePhotos = isChallengeView && activeChallenge ?
+            challengePhotos[activeChallenge] || [] : [];
+        const photosToUse = isChallengeView ? currentChallengePhotos : (isAdmin ? allPhotos : photos);
+
+        const currentIndex = photosToUse.findIndex(photo =>
+            `${API_URL}/uploads/${photo.filename}` === image
+        );
+
+        const handlePrev = (e) => {
+            e.stopPropagation();
+            if (currentIndex > 0) {
+                setSelectedImage(`${API_URL}/uploads/${photosToUse[currentIndex - 1].filename}`);
+            }
+        };
+
+        const handleNext = (e) => {
+            e.stopPropagation();
+            if (currentIndex < photosToUse.length - 1) {
+                setSelectedImage(`${API_URL}/uploads/${photosToUse[currentIndex + 1].filename}`);
+            }
+        };
 
         return (
             <div
                 className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
                 onClick={onClose}
             >
-                <div className="max-w-[90vw] max-h-[90vh]">
+                <div className="max-w-[90vw] max-h-[90vh] relative">
                     <img
                         src={image}
                         alt="Full size"
@@ -143,13 +178,30 @@ function App() {
                         onClick={onClose}
                         className="absolute top-4 right-4 text-white hover:text-gray-300"
                     >
-                        <X className="w-8 h-8" />
+                        <X className="w-8 h-8"/>
                     </button>
+
+                    {currentIndex > 0 && (
+                        <button
+                            onClick={handlePrev}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2 bg-black bg-opacity-50 rounded-full"
+                        >
+                            <ChevronLeft className="w-8 h-8"/>
+                        </button>
+                    )}
+
+                    {currentIndex < photosToUse.length - 1 && (
+                        <button
+                            onClick={handleNext}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2 bg-black bg-opacity-50 rounded-full"
+                        >
+                            <ChevronRight className="w-8 h-8"/>
+                        </button>
+                    )}
                 </div>
             </div>
         );
     };
-
     const removeFile = (fileName) => {
         setSelectedFiles(prev => prev.filter(file => file.name !== fileName));
         setUploadProgress(prev => {
@@ -540,7 +592,6 @@ function App() {
     };
 
 
-
     const Toast = ({message, type = 'success', onClose}) => {
         const bgColor = type === 'success' ? 'bg-wedding-green-light' : 'bg-red-100';
         const textColor = type === 'success' ? 'text-wedding-green-dark' : 'text-red-800';
@@ -577,33 +628,34 @@ function App() {
         );
     };
     const renderHeader = () => (
-        <header className="relative mb-8">
+        <header className="relative mb-8 pt-16"> {/* Added pt-16 for top padding */}
             {!isAdmin && (
                 <button
                     onClick={() => setShowAdminModal(true)}
-                    className="absolute top-4 right-4 p-2 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300 bg-white rounded-full shadow-md hover:shadow-lg"
+                    className="absolute top-2 right-2 p-2 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300 bg-white rounded-full shadow-md hover:shadow-lg z-10" // Added z-10
                     title="Admin Access"
                 >
-                    <Settings className="w-6 h-6" />
+                    <Settings className="w-6 h-6"/>
                 </button>
             )}
             {isAdmin && (
-                <div className="absolute top-4 right-4 flex items-center space-x-3">
-                    <div className="px-3 py-2 bg-wedding-green-light text-wedding-green-dark rounded-full shadow-md flex items-center space-x-2">
+                <div className="absolute top-2 right-2 flex items-center space-x-3 z-10"> {/* Adjusted positioning */}
+                    <div
+                        className="px-3 py-2 bg-wedding-green-light text-wedding-green-dark rounded-full shadow-md flex items-center space-x-2">
                         <span className="text-sm font-medium">Admin Mode</span>
-                        <CheckCircle className="w-4 h-4" />
+                        <CheckCircle className="w-4 h-4"/>
                     </div>
                     <button
                         onClick={() => {
                             setIsAdmin(false);
                             setAllPhotos([]);
-                            setPhotos([]); // Reset photos array
-                            fetchPhotos(false); // Fetch only user's photos
+                            setPhotos([]);
+                            fetchPhotos(false);
                         }}
                         className="p-2 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300 bg-white rounded-full shadow-md hover:shadow-lg"
                         title="Exit Admin Mode"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4"/>
                     </button>
                 </div>
             )}
@@ -612,8 +664,10 @@ function App() {
                     Engagement Photo Gallery
                     <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
                     <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
-                    <div className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
-                    <div className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
+                    <div
+                        className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
+                    <div
+                        className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
                 </h1>
                 <p className="text-wedding-purple mt-6">
                     {isAdmin ? 'Admin View - All Photos' : `Welcome, ${guestName}!`}
@@ -633,11 +687,11 @@ function App() {
                     }}
                     className="absolute top-4 right-4 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300"
                 >
-                    <X className="w-5 h-5" />
+                    <X className="w-5 h-5"/>
                 </button>
 
                 <div className="text-center mb-6">
-                    <LogIn className="w-12 h-12 text-wedding-purple mx-auto mb-4" />
+                    <LogIn className="w-12 h-12 text-wedding-purple mx-auto mb-4"/>
                     <h2 className="text-2xl font-serif text-wedding-purple-dark">
                         Admin Access
                     </h2>
@@ -664,7 +718,7 @@ function App() {
                         ) : (
                             <>
                                 <span>Login</span>
-                                <LogIn className="w-4 h-4" />
+                                <LogIn className="w-4 h-4"/>
                             </>
                         )}
                     </button>
@@ -815,7 +869,8 @@ function App() {
 
                         {selectedChallengeFiles[challenge.id] && (
                             <div className="mt-4 space-y-4">
-                                <div className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
+                                <div
+                                    className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
                                     <div className="flex-1">
                                         <p className="text-sm truncate text-wedding-purple-dark">
                                             {selectedChallengeFiles[challenge.id].name}
@@ -867,13 +922,16 @@ function App() {
                                 {expandedChallenges.has(challenge.id) && (
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
                                         {challengePhotos[challenge.id].map((photo) => (
-                                            <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
+                                            <div key={photo.id}
+                                                 className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
                                                 <img
                                                     src={`${API_URL}/uploads/${photo.filename}`}
                                                     alt={`Photo by ${photo.uploadedBy}`}
                                                     className="w-full h-[200px] object-contain rounded"
-                                                    onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
-                                                />
+                                                    onClick={() => {
+                                                        setActiveChallenge(challenge.id);
+                                                        setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
+                                                    }}/>
                                                 <p className="text-sm mt-1 text-wedding-purple">
                                                     By: {photo.uploadedBy}
                                                 </p>
@@ -1057,7 +1115,10 @@ function App() {
             {selectedImage && (
                 <ImageModal
                     image={selectedImage}
-                    onClose={() => setSelectedImage(null)}
+                    onClose={() => {
+                        setSelectedImage(null);
+                        setActiveChallenge(null);
+                    }}
                 />
             )}
         </div>
