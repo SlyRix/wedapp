@@ -1,14 +1,9 @@
 import React, {useState, useEffect} from 'react';
-import {CheckCircle, Upload, X} from 'lucide-react';
+import {CheckCircle, Upload, X, AlertCircle, Settings, LogIn } from 'lucide-react';
 
 const API_URL = 'http://slyrix.com:3001/api';
 
-
-const GOOGLE_CLIENT_ID = '149658260490-pf8nbtpm23macvlorrmungbld2kia9nq.apps.googleusercontent.com';
 const ADMIN_PASSWORD = 'happy';
-const API_KEY = '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';
-const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/drive.appdata';
 const MAX_PHOTOS = 30;
 
 const isDev = window.location.hostname === 'localhost' || window.location.hostname.includes('192.168');
@@ -44,14 +39,13 @@ const challenges = [
 ];
 
 function App() {
+    const [challengePhotos, setChallengePhotos] = useState({});
+    const [notification, setNotification] = useState(null);
     const [guestName, setGuestName] = useState('');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [selectedTab, setSelectedTab] = useState('general');
     const [photos, setPhotos] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [gapiInited, setGapiInited] = useState(false);
-    const [gisInited, setGisInited] = useState(false);
-    const [tokenClient, setTokenClient] = useState(null);
     const [completedChallenges, setCompletedChallenges] = useState(new Set());
     const [showAdminModal, setShowAdminModal] = useState(false);
     const [adminPassword, setAdminPassword] = useState('');
@@ -65,46 +59,6 @@ function App() {
     const [challengeUploadProgress, setChallengeUploadProgress] = useState({});
     const [failedImages, setFailedImages] = useState(new Set()); // Add this state at the top with other states
     const [imageErrors, setImageErrors] = useState({});
-
-    useEffect(() => {
-        // Load Google API
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.onload = gapiLoaded;
-        document.body.appendChild(script);
-
-        const gisScript = document.createElement('script');
-        gisScript.src = 'https://accounts.google.com/gsi/client';
-        gisScript.onload = gisLoaded;
-        document.body.appendChild(gisScript);
-
-        // Load saved auth state
-        const savedToken = localStorage.getItem('googleAuthToken');
-        if (savedToken) {
-            try {
-                const tokenData = JSON.parse(savedToken);
-                // Check if token is expired
-                if (tokenData.expiry_date > Date.now()) {
-                    // Token is still valid
-                    gapi.client.setToken(tokenData);
-                } else {
-                    // Token is expired, remove it
-                    localStorage.removeItem('googleAuthToken');
-                }
-            } catch (error) {
-                console.error('Error parsing saved token:', error);
-                localStorage.removeItem('googleAuthToken');
-            }
-        }
-
-        const userAgent = navigator.userAgent;
-        const platform = navigator.platform;
-        const browser = getBrowserInfo(userAgent);
-        const device = getDeviceInfo(userAgent, platform);
-        setDeviceInfo(`${device} - ${browser}`);
-
-        // Rest of your useEffect code...
-    }, [guestName]);
 
 
     useEffect(() => {
@@ -136,125 +90,11 @@ function App() {
         return 'Unknown Device';
     };
 
-    function gapiLoaded() {
-        gapi.load('client', async () => {
-            try {
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    discoveryDocs: [DISCOVERY_DOC],
-                });
-                setGapiInited(true);
-            } catch (err) {
-                console.error('Error initializing GAPI client:', err);
-            }
-        });
-    }
-
-    function gisLoaded() {
-        const client = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: SCOPES,
-            callback: (tokenResponse) => {
-                if (tokenResponse.error !== undefined) {
-                    throw tokenResponse;
-                }
-                // Save the token
-                const tokenData = {
-                    ...tokenResponse,
-                    expiry_date: Date.now() + (tokenResponse.expires_in * 1000)
-                };
-                localStorage.setItem('googleAuthToken', JSON.stringify(tokenData));
-
-                // Continue with the regular callback logic
-                if (typeof client.callback === 'function') {
-                    client.callback(tokenResponse);
-                }
-            },
-            prompt: 'consent',
-            ux_mode: 'popup',
-            include_granted_scopes: true,
-            enable_serial_consent: true,
-            error_callback: (err) => {
-                console.error('Token client error:', err);
-                localStorage.removeItem('googleAuthToken');
-            }
-        });
-        setTokenClient(client);
-        setGisInited(true);
-    }
-
-    // Add a function to handle token refresh
-    const refreshToken = async () => {
-        if (tokenClient) {
-            tokenClient.callback = (response) => {
-                if (response.error !== undefined) {
-                    console.error('Error refreshing token:', response);
-                    localStorage.removeItem('googleAuthToken');
-                    return;
-                }
-                const tokenData = {
-                    ...response,
-                    expiry_date: Date.now() + (response.expires_in * 1000)
-                };
-                localStorage.setItem('googleAuthToken', JSON.stringify(tokenData));
-                gapi.client.setToken(tokenData);
-            };
-            tokenClient.requestAccessToken({prompt: ''});
-        }
-    };
-    const checkAndRefreshToken = async () => {
-        const savedToken = localStorage.getItem('googleAuthToken');
-        if (savedToken) {
-            const tokenData = JSON.parse(savedToken);
-            // Refresh token if it expires in less than 5 minutes
-            if (tokenData.expiry_date < Date.now() + (5 * 60 * 1000)) {
-                await refreshToken();
-            }
-        }
-    };
-
-    async function initializeGapiClient() {
-        await gapi.client.init({
-            apiKey: API_KEY,
-            discoveryDocs: [DISCOVERY_DOC],
-        });
-        setGapiInited(true);
-    }
-
-
-    const createWeddingFolder = async () => {
-        try {
-            const response = await gapi.client.drive.files.list({
-                q: "name='Wedding Photos' and mimeType='application/vnd.google-apps.folder'",
-                fields: 'files(id, name)',
-            });
-
-            if (response.result.files.length > 0) {
-                return response.result.files[0].id;
-            }
-
-            const fileMetadata = {
-                name: 'Wedding Photos',
-                mimeType: 'application/vnd.google-apps.folder',
-            };
-
-            const folder = await gapi.client.drive.files.create({
-                resource: fileMetadata,
-                fields: 'id',
-            });
-
-            return folder.result.id;
-        } catch (err) {
-            console.error('Error creating folder:', err);
-            throw err;
-        }
-    };
-
     const handleFileSelection = (e) => {
         const files = Array.from(e.target.files);
 
         if (files.length > MAX_PHOTOS) {
-            alert(`You can only upload up to ${MAX_PHOTOS} photos at once.`);
+            setNotification({message: `You can only upload up to ${MAX_PHOTOS} photos at once.`, type: 'error'});
             return;
         }
 
@@ -266,7 +106,8 @@ function App() {
         });
 
         if (validFiles.length !== files.length) {
-            alert('Some files were skipped. Only images under 10MB are allowed.');
+            setNotification({message: 'Some files were skipped. Only images under 10MB are allowed.', type: 'error'});
+
         }
 
         setSelectedFiles(validFiles);
@@ -290,94 +131,111 @@ function App() {
     const uploadFiles = async () => {
         if (selectedFiles.length === 0) return;
         setLoading(true);
+        const failedUploads = new Set();
 
         try {
+            // Create a new FormData instance
             const formData = new FormData();
+
+            // Add each file to the FormData
             selectedFiles.forEach((file) => {
                 formData.append('photos', file);
             });
 
-            formData.append('uploadedBy', guestName);
-            formData.append('uploadType', 'General');
-            formData.append('deviceInfo', deviceInfo);
+            // Add metadata
+            formData.append('metadata', JSON.stringify({
+                uploadedBy: guestName,
+                uploadType: 'General',
+                deviceInfo: deviceInfo
+            }));
 
-            await uploadFiles(formData, (progress) => {
-                setUploadProgress(prev => ({
-                    ...prev,
-                    total: progress
-                }));
+            // Create and configure XMLHttpRequest
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${API_URL}/upload`, true);
+
+            // Set up promise to handle the upload
+            const uploadPromise = new Promise((resolve, reject) => {
+                // Handle progress
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const progressPercent = Math.round((event.loaded / event.total) * 100);
+                        const newProgress = {};
+                        selectedFiles.forEach(file => {
+                            newProgress[file.name] = progressPercent;
+                        });
+                        setUploadProgress(newProgress);
+                    }
+                };
+
+                // Handle network errors
+                xhr.onerror = () => {
+                    reject(new Error('Network error occurred during upload'));
+                };
+
+                // Handle timeout
+                xhr.ontimeout = () => {
+                    reject(new Error('Upload request timed out'));
+                };
+
+                // Handle response
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve(xhr.response);
+                    } else {
+                        reject(new Error(`Server returned ${xhr.status}: ${xhr.statusText}`));
+                    }
+                };
             });
 
-            alert('Photos uploaded successfully!');
+            // Set timeout to 30 seconds
+            xhr.timeout = 30000;
+
+            // Send the request
+            xhr.send(formData);
+
+            // Wait for upload to complete
+            await uploadPromise;
+
+            // Handle successful upload
+            setNotification({
+                message: 'Photos uploaded successfully!',
+                type: 'success'
+            });
+
+            // Clear upload state
             setSelectedFiles([]);
             setUploadProgress({});
+
+            // Refresh photos
             await fetchPhotos();
+
         } catch (error) {
-            console.error('Error uploading files:', error);
-            alert('Error uploading photos. Please try again.');
+            console.error('Upload error:', error);
+
+            // Handle specific error types
+            let errorMessage = 'Error uploading photos. Please try again.';
+
+            if (error.message.includes('Network error')) {
+                errorMessage = 'Network error occurred. Please check your internet connection.';
+            } else if (error.message.includes('timed out')) {
+                errorMessage = 'Upload timed out. Please try again with a smaller file or better connection.';
+            } else if (error.message.includes('413')) {
+                errorMessage = 'Files are too large. Please reduce file sizes and try again.';
+            }
+
+            setNotification({
+                message: errorMessage,
+                type: 'error'
+            });
+
+            // Mark all files as failed
+            selectedFiles.forEach(file => failedUploads.add(file.name));
+            setFailedImages(failedUploads);
+
         } finally {
             setLoading(false);
         }
     };
-
-    const uploadMultipleFiles = async () => {
-        const folderId = await createWeddingFolder();
-        const timestamp = new Date().toISOString();
-
-        for (const file of selectedFiles) {
-            try {
-                const metadata = {
-                    name: `${guestName}_General_${timestamp}_${file.name}`,
-                    parents: [folderId],
-                    description: JSON.stringify({
-                        uploadedBy: guestName,
-                        uploadDate: timestamp,
-                        deviceInfo: deviceInfo,
-                        uploadType: 'General Upload'
-                    }),
-                };
-
-                const form = new FormData();
-                form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
-                form.append('file', file);
-
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart');
-                xhr.setRequestHeader('Authorization', 'Bearer ' + gapi.client.getToken().access_token);
-
-                xhr.upload.onprogress = (event) => {
-                    if (event.lengthComputable) {
-                        const progress = Math.round((event.loaded / event.total) * 100);
-                        setUploadProgress(prev => ({
-                            ...prev,
-                            [file.name]: progress
-                        }));
-                    }
-                };
-
-                await new Promise((resolve, reject) => {
-                    xhr.onload = () => {
-                        if (xhr.status === 200) {
-                            resolve();
-                        } else {
-                            reject(new Error(`Upload failed for ${file.name}`));
-                        }
-                    };
-                    xhr.onerror = () => reject(new Error(`Network error for ${file.name}`));
-                    xhr.send(form);
-                });
-
-            } catch (err) {
-                console.error(`Error uploading ${file.name}:`, err);
-            }
-        }
-
-        alert('All photos uploaded successfully!');
-        setSelectedFiles([]);
-        setUploadProgress({});
-        fetchPhotos();
-    };
-
     const handleChallengeUpload = async (e, challengeId) => {
         if (!e.target.files[0]) return;
 
@@ -386,32 +244,10 @@ function App() {
         const file = e.target.files[0];
 
         try {
-            if (!gapi.client.getToken()) {
-                return new Promise((resolve, reject) => {
-                    try {
-                        tokenClient.callback = async (resp) => {
-                            if (resp.error !== undefined) {
-                                reject(resp);
-                                return;
-                            }
-                            try {
-                                await uploadChallengeFile(file, challengeId);
-                                resolve();
-                            } catch (err) {
-                                reject(err);
-                            }
-                        };
-                        tokenClient.requestAccessToken();
-                    } catch (err) {
-                        reject(err);
-                    }
-                });
-            } else {
-                await uploadChallengeFile(file, challengeId);
-            }
+            await uploadChallengeFile(file, challengeId);
         } catch (err) {
             console.error('Error uploading challenge photo:', err);
-            alert('Error uploading photo. Please try again.');
+            setNotification({message: 'Error uploading photo. Please try again.', type: 'error'});
         }
         setLoading(false);
         setActiveChallenge(null);
@@ -429,22 +265,57 @@ function App() {
             const formData = new FormData();
 
             formData.append('photo', file);
+            // Add each field separately instead of relying on metadata parsing
             formData.append('uploadedBy', guestName);
             formData.append('challengeId', challengeId.toString());
             formData.append('challengeTitle', challenge.title);
             formData.append('deviceInfo', deviceInfo);
 
-            const response = await fetch(`${API_URL}/challenge-upload`, {
-                method: 'POST',
-                body: formData,
-                // Don't set Content-Type header, let the browser handle it
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${API_URL}/challenge-upload`, true);
+
+            // Set up promise to handle the upload
+            const uploadPromise = new Promise((resolve, reject) => {
+                // Handle progress
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const progressPercent = Math.round((event.loaded / event.total) * 100);
+                        setChallengeUploadProgress(prev => ({
+                            ...prev,
+                            [challengeId]: progressPercent
+                        }));
+                    }
+                };
+
+                // Handle network errors
+                xhr.onerror = () => {
+                    reject(new Error('Network error occurred during upload'));
+                };
+
+                // Handle timeout
+                xhr.ontimeout = () => {
+                    reject(new Error('Upload request timed out'));
+                };
+
+                // Handle response
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve(JSON.parse(xhr.response));
+                    } else {
+                        reject(new Error(`HTTP error! status: ${xhr.status}`));
+                    }
+                };
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            // Set timeout to 30 seconds
+            xhr.timeout = 30000;
 
-            const data = await response.json();
+            // Send the request
+            xhr.send(formData);
+
+            // Wait for upload to complete
+            const data = await uploadPromise;
+
             console.log('Challenge upload successful:', data);
 
             // Update completed challenges
@@ -454,122 +325,89 @@ function App() {
             localStorage.setItem(`completedChallenges_${guestName}`,
                 JSON.stringify([...updatedChallenges]));
 
-            alert('Challenge photo uploaded successfully!');
+            setNotification({
+                message: 'Challenge photo uploaded successfully!',
+                type: 'success'
+            });
+            await fetchChallengePhotos(challengeId);
+
             setSelectedChallengeFiles(prev => {
                 const updated = {...prev};
                 delete updated[challengeId];
                 return updated;
             });
+
             setChallengeUploadProgress(prev => {
                 const updated = {...prev};
                 delete updated[challengeId];
                 return updated;
             });
+
             await fetchPhotos();
+
         } catch (error) {
             console.error('Error uploading challenge photo:', error);
-            alert('Error uploading photo. Please try again.');
+            setNotification({
+                message: 'Error uploading photo. Please try again.',
+                type: 'error'
+            });
         } finally {
             setLoading(false);
             setActiveChallenge(null);
         }
     };
 
-// Add this new function to handle the actual upload:
-    const performChallengeUpload = async (file, challengeId) => {
-        const folderId = await createWeddingFolder();
-        const challenge = challenges.find(c => c.id === challengeId);
-        const timestamp = new Date().toISOString();
-
-        const metadata = {
-            name: `${guestName}_${challenge.title}_${timestamp}_${file.name}`,
-            parents: [folderId],
-            description: JSON.stringify({
-                uploadedBy: guestName,
-                uploadDate: timestamp,
-                deviceInfo: deviceInfo,
-                uploadType: 'Challenge',
-                challengeTitle: challenge.title
-            }),
-        };
-
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
-        form.append('file', file);
-
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart');
-        xhr.setRequestHeader('Authorization', 'Bearer ' + gapi.client.getToken().access_token);
-
-        xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-                const progress = Math.round((event.loaded / event.total) * 100);
-                setChallengeUploadProgress(prev => ({
-                    ...prev,
-                    [challengeId]: progress
-                }));
-            }
-        };
-
-        await new Promise((resolve, reject) => {
-            xhr.onload = () => {
-                if (xhr.status === 200) {
-                    resolve();
-                } else {
-                    reject(new Error(`Upload failed for challenge photo`));
-                }
-            };
-            xhr.onerror = () => reject(new Error(`Network error for challenge photo`));
-            xhr.send(form);
-        });
-
-        const updatedChallenges = new Set(completedChallenges);
-        updatedChallenges.add(challengeId);
-        setCompletedChallenges(updatedChallenges);
-        localStorage.setItem(`completedChallenges_${guestName}`, JSON.stringify([...updatedChallenges]));
-
-        alert('Challenge photo uploaded successfully!');
-        fetchPhotos();
-    };
-    const refreshImageUrls = () => {
-        const newAccessToken = gapi.client.getToken().access_token;
-
-        setAllPhotos(prevPhotos => prevPhotos.map(photo => ({
-            ...photo,
-            imageUrl: `https://drive.google.com/thumbnail?id=${photo.id}&sz=w400-h400&access_token=${newAccessToken}`
-        })));
-
-        setPhotos(prevPhotos => prevPhotos.map(photo => ({
-            ...photo,
-            imageUrl: `https://drive.google.com/thumbnail?id=${photo.id}&sz=w400-h400&access_token=${newAccessToken}`
-        })));
-    };
     useEffect(() => {
-        if (isLoggedIn && (photos.length > 0 || allPhotos.length > 0)) {
-            const refreshInterval = setInterval(refreshImageUrls, 1800000); // Refresh every 30 minutes
-            return () => clearInterval(refreshInterval);
+        // Load device info only
+        const userAgent = navigator.userAgent;
+        const platform = navigator.platform;
+        const browser = getBrowserInfo(userAgent);
+        const device = getDeviceInfo(userAgent, platform);
+        setDeviceInfo(`${device} - ${browser}`);
+    }, []);
+    const fetchChallengePhotos = async (challengeId) => {
+        try {
+            const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
+            const data = await response.json();
+            setChallengePhotos(prev => ({
+                ...prev,
+                [challengeId]: data
+            }));
+        } catch (error) {
+            console.error('Error fetching challenge photos:', error);
         }
-    }, [isLoggedIn, photos.length, allPhotos.length]);
-
-
-    const fetchPhotos = async () => {
+    };
+    const fetchPhotos = async (isAdminFetch = false) => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/photos${isAdmin ? '' : `?uploadedBy=${guestName}`}`);
+            const url = (isAdminFetch || isAdmin)
+                ? `${API_URL}/photos`
+                : `${API_URL}/photos?uploadedBy=${encodeURIComponent(guestName)}`;
+
+            console.log('Fetching photos from:', url);
+
+            const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to fetch photos');
+
             const data = await response.json();
-            setPhotos(data);
-            if (isAdmin) {
+            console.log('Received photos:', data.length);
+
+            if (isAdminFetch || isAdmin) {
                 setAllPhotos(data);
+                setPhotos(data);
+            } else {
+                setPhotos(data);
             }
         } catch (error) {
             console.error('Error fetching photos:', error);
-            alert('Error loading photos. Please try again.');
+            setNotification({
+                message: 'Error loading photos. Please try again.',
+                type: 'error'
+            });
         } finally {
             setLoading(false);
         }
     };
-
 
     const handleChallengeFileSelect = (e, challengeId) => {
         const file = e.target.files[0];
@@ -580,7 +418,8 @@ function App() {
         const isUnder10MB = file.size <= 10 * 1024 * 1024; // 10MB limit
 
         if (!isImage || !isUnder10MB) {
-            alert('Please select an image under 10MB.');
+            setNotification({message: 'Please select an image under 10MB.', type: 'error'});
+
             return;
         }
 
@@ -623,40 +462,165 @@ function App() {
         if (adminPassword === ADMIN_PASSWORD) {
             setLoading(true);
             try {
+                await fetchPhotos(true); // Pass true to indicate admin fetch
                 setIsAdmin(true);
                 setShowAdminModal(false);
-
-                if (!gapiInited || !gisInited) {
-                    alert('Please wait for Google API to initialize');
-                    return;
-                }
-
-                if (!gapi.client.getToken()) {
-                    console.log('Requesting Google authentication...');
-                    tokenClient.callback = async (resp) => {
-                        if (resp.error !== undefined) {
-                            console.error('Google auth error:', resp);
-                            alert('Error authenticating with Google');
-                            return;
-                        }
-                        console.log('Google auth successful, fetching photos...');
-                        await fetchPhotos();
-                    };
-                    tokenClient.requestAccessToken({prompt: 'consent'});
-                } else {
-                    console.log('Already authenticated, fetching photos...');
-                    await fetchPhotos();
-                }
+                setAdminPassword('');
+                setNotification({
+                    message: 'Admin access granted',
+                    type: 'success'
+                });
             } catch (err) {
                 console.error('Admin login error:', err);
-                alert('Error logging in as admin. Please try again.');
+                setNotification({
+                    message: 'Error logging in as admin. Please try again.',
+                    type: 'error'
+                });
+                setIsAdmin(false);
             } finally {
                 setLoading(false);
             }
         } else {
-            alert('Incorrect password');
+            setNotification({
+                message: 'Incorrect password',
+                type: 'error'
+            });
         }
     };
+
+
+
+    const Toast = ({message, type = 'success', onClose}) => {
+        const bgColor = type === 'success' ? 'bg-wedding-green-light' : 'bg-red-100';
+        const textColor = type === 'success' ? 'text-wedding-green-dark' : 'text-red-800';
+        const Icon = type === 'success' ? CheckCircle : AlertCircle;
+
+        // Auto-dismiss after 3 seconds
+        React.useEffect(() => {
+            const timer = setTimeout(() => {
+                onClose();
+            }, 3000);
+            return () => clearTimeout(timer);
+        }, [onClose]);
+
+        return (
+            <div
+                className={`fixed top-4 right-4 z-50 ${bgColor} border-l-4 border-${type === 'success' ? 'wedding-green' : 'red-500'} p-4 rounded shadow-lg max-w-md transform transition-transform duration-300 ease-in-out`}>
+                <div className="flex items-start">
+                    <div className={`flex-shrink-0 ${textColor}`}>
+                        <Icon className="h-5 w-5"/>
+                    </div>
+                    <div className="ml-3">
+                        <p className={`text-sm font-medium ${textColor}`}>{message}</p>
+                    </div>
+                    <div className="ml-4 flex-shrink-0 flex">
+                        <button
+                            onClick={onClose}
+                            className={`inline-flex ${textColor} hover:opacity-75 focus:outline-none`}
+                        >
+                            <X className="h-5 w-5"/>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+    const renderHeader = () => (
+        <header className="relative mb-8">
+            {!isAdmin && (
+                <button
+                    onClick={() => setShowAdminModal(true)}
+                    className="absolute top-4 right-4 p-2 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300 bg-white rounded-full shadow-md hover:shadow-lg"
+                    title="Admin Access"
+                >
+                    <Settings className="w-6 h-6" />
+                </button>
+            )}
+            {isAdmin && (
+                <div className="absolute top-4 right-4 flex items-center space-x-3">
+                    <div className="px-3 py-2 bg-wedding-green-light text-wedding-green-dark rounded-full shadow-md flex items-center space-x-2">
+                        <span className="text-sm font-medium">Admin Mode</span>
+                        <CheckCircle className="w-4 h-4" />
+                    </div>
+                    <button
+                        onClick={() => {
+                            setIsAdmin(false);
+                            setAllPhotos([]);
+                            setPhotos([]); // Reset photos array
+                            fetchPhotos(false); // Fetch only user's photos
+                        }}
+                        className="p-2 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300 bg-white rounded-full shadow-md hover:shadow-lg"
+                        title="Exit Admin Mode"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+            <div className="text-center">
+                <h1 className="text-4xl font-serif text-wedding-purple-dark mb-2 relative inline-block">
+                    Wedding Photo Gallery
+                    <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
+                    <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
+                    <div className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
+                    <div className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
+                </h1>
+                <p className="text-wedding-purple mt-6">
+                    {isAdmin ? 'Admin View - All Photos' : `Welcome, ${guestName}!`}
+                </p>
+            </div>
+        </header>
+    );
+
+// Add this modal render function
+    const renderAdminModal = () => (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-8 rounded-lg max-w-md w-full border-2 border-wedding-purple relative">
+                <button
+                    onClick={() => {
+                        setShowAdminModal(false);
+                        setAdminPassword('');
+                    }}
+                    className="absolute top-4 right-4 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <div className="text-center mb-6">
+                    <LogIn className="w-12 h-12 text-wedding-purple mx-auto mb-4" />
+                    <h2 className="text-2xl font-serif text-wedding-purple-dark">
+                        Admin Access
+                    </h2>
+                </div>
+
+                <form onSubmit={handleAdminLogin} className="space-y-6">
+                    <div>
+                        <input
+                            type="password"
+                            placeholder="Enter admin password"
+                            value={adminPassword}
+                            onChange={(e) => setAdminPassword(e.target.value)}
+                            className="w-full p-3 border-2 border-wedding-green focus:ring-wedding-purple focus:border-wedding-purple rounded"
+                            required
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-wedding-purple text-white p-3 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:opacity-50 flex items-center justify-center space-x-2"
+                    >
+                        {loading ? (
+                            <span>Logging in...</span>
+                        ) : (
+                            <>
+                                <span>Login</span>
+                                <LogIn className="w-4 h-4" />
+                            </>
+                        )}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
 
     const renderGeneralUpload = () => (
         <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
@@ -670,7 +634,7 @@ function App() {
                         onChange={handleFileSelection}
                         className="hidden"
                         id="file-upload"
-                        disabled={loading || !gapiInited || !gisInited}
+                        disabled={loading}
                     />
                     <label
                         htmlFor="file-upload"
@@ -724,64 +688,139 @@ function App() {
             </div>
         </div>
     );
-    const renderPhotoGallery = () => {
-        const renderImage = (photo) => {
-            const handleImageError = (photoId) => {
-                console.log('Image error for:', photoId);
-                // Attempt to refresh the token and URL on error
-                const newAccessToken = gapi.client.getToken().access_token;
-                const updatedUrl = `https://drive.google.com/thumbnail?id=${photo.id}&sz=w400-h400&access_token=${newAccessToken}`;
 
-                // Update the photo's URL
-                const updatePhotos = (prevPhotos) => prevPhotos.map(p =>
-                    p.id === photoId ? {...p, imageUrl: updatedUrl} : p
-                );
+    const renderChallenges = () => (
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-2 border-wedding-purple-light">
+            <h2 className="text-2xl font-serif mb-4 text-wedding-purple-dark">Photo Challenges</h2>
+            <div className="space-y-6">
+                {challenges.map((challenge) => (
+                    <div
+                        key={challenge.id}
+                        className={`border-2 rounded-lg p-6 relative ${
+                            completedChallenges.has(challenge.id)
+                                ? 'bg-wedding-green-light/20 border-wedding-green'
+                                : 'bg-white border-wedding-purple-light'
+                        }`}
+                    >
+                        {completedChallenges.has(challenge.id) && (
+                            <div className="absolute top-4 right-4">
+                                <CheckCircle className="text-wedding-green-dark" size={24}/>
+                            </div>
+                        )}
 
-                setAllPhotos(updatePhotos);
-                setPhotos(updatePhotos);
+                        <div className="mb-4">
+                            <h3 className="text-xl font-semibold text-wedding-purple-dark mb-2">
+                                {challenge.title}
+                            </h3>
+                            <p className="text-wedding-purple">
+                                {challenge.description}
+                            </p>
+                        </div>
 
-                // If still failing, mark as error
-                setImageErrors(prev => ({
-                    ...prev,
-                    [photoId]: true
-                }));
-            };
-
-            if (imageErrors[photo.id]) {
-                return (
-                    <div className="w-full h-48 bg-gray-200 flex items-center justify-center rounded mb-2">
-                        <div className="text-center">
-                            <p className="text-gray-500 mb-2">Image preview unavailable</p>
-                            <a
-                                href={photo.webViewLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-500 hover:underline text-sm"
+                        <div className="border-2 border-dashed border-wedding-green rounded-lg p-4 text-center">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleChallengeFileSelect(e, challenge.id)}
+                                className="hidden"
+                                id={`challenge-upload-${challenge.id}`}
+                                disabled={loading}
+                            />
+                            <label
+                                htmlFor={`challenge-upload-${challenge.id}`}
+                                className={`cursor-pointer flex flex-col items-center justify-center p-4 rounded-lg transition-colors ${
+                                    completedChallenges.has(challenge.id)
+                                        ? 'bg-wedding-green-light/20 hover:bg-wedding-green-light/40'
+                                        : 'bg-wedding-accent-light hover:bg-wedding-green-light/20'
+                                }`}
                             >
-                                Open in Drive
-                            </a>
+                                {completedChallenges.has(challenge.id) ? (
+                                    <>
+                                        <div className="mb-2 text-wedding-green-dark">
+                                            <CheckCircle size={32}/>
+                                        </div>
+                                        <p className="text-wedding-purple-dark font-medium">
+                                            Challenge Completed!
+                                        </p>
+                                        <p className="text-sm text-wedding-purple mt-1">
+                                            Click to upload another photo
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="mb-2 text-wedding-purple">
+                                            <Upload size={32}/>
+                                        </div>
+                                        <p className="text-wedding-purple-dark font-medium">
+                                            Select Photo for this Challenge
+                                        </p>
+                                        <p className="text-sm text-wedding-purple mt-1">
+                                            Click to select an image
+                                        </p>
+                                    </>
+                                )}
+                            </label>
                         </div>
-                    </div>
-                );
-            }
 
-            return (
-                <div className="relative">
-                    <img
-                        src={photo.imageUrl}
-                        alt={photo.name}
-                        className="w-full h-48 object-cover rounded mb-2"
-                        onError={() => handleImageError(photo.id)}
-                        loading="lazy"
-                    />
-                    {loading && (
-                        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
-                            <p>Loading...</p>
-                        </div>
-                    )}
-                </div>
-            );
+                        {selectedChallengeFiles[challenge.id] && (
+                            <div className="mt-4 space-y-4">
+                                <div className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
+                                    <div className="flex-1">
+                                        <p className="text-sm truncate text-wedding-purple-dark">
+                                            {selectedChallengeFiles[challenge.id].name}
+                                        </p>
+                                        {challengeUploadProgress[challenge.id] > 0 && (
+                                            <div className="w-full bg-wedding-green-light rounded-full h-2">
+                                                <div
+                                                    className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
+                                                    style={{width: `${challengeUploadProgress[challenge.id]}%`}}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => removeChallengeFile(challenge.id)}
+                                        className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
+                                    >
+                                        <X className="w-4 h-4"/>
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={() => uploadChallengeFile(selectedChallengeFiles[challenge.id], challenge.id)}
+                                    disabled={loading}
+                                    className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
+                                >
+                                    {loading && activeChallenge === challenge.id
+                                        ? 'Uploading...'
+                                        : 'Upload Photo'
+                                    }
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
+    const renderPhotoGallery = () => {
+        const getImageUrl = (filename) => {
+            return `${API_URL}/uploads/${filename}`;
         };
+
+        // Update this line to ensure we show the correct photos
+        const photosToDisplay = isAdmin ? allPhotos : photos.filter(photo => {
+            let metadata;
+            try {
+                metadata = typeof photo.description === 'string'
+                    ? JSON.parse(photo.description)
+                    : photo.description || {};
+            } catch (e) {
+                metadata = {};
+            }
+            return metadata.uploadedBy === guestName || photo.uploadedBy === guestName;
+        });
 
         return (
             <div className="bg-white rounded-lg shadow-lg p-6">
@@ -792,25 +831,48 @@ function App() {
                     <div className="text-center py-8">
                         <p className="text-gray-600">Loading photos...</p>
                     </div>
+                ) : photosToDisplay.length === 0 ? (
+                    <div className="text-center py-8">
+                        <p className="text-gray-600">No photos found</p>
+                    </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {(isAdmin ? allPhotos : photos).map((photo) => {
-                            let metadata = {};
+                        {photosToDisplay.map((photo) => {
+                            let metadata;
                             try {
-                                metadata = JSON.parse(photo.description || '{}');
+                                metadata = typeof photo.description === 'string'
+                                    ? JSON.parse(photo.description)
+                                    : photo.description || {};
                             } catch (e) {
+                                console.error('Error parsing metadata:', e);
                                 metadata = {};
                             }
 
+                            const imageUrl = getImageUrl(photo.filename);
+
                             return (
                                 <div key={photo.id} className="bg-gray-100 p-4 rounded">
-                                    {renderImage(photo)}
+                                    <div className="relative">
+                                        <img
+                                            src={imageUrl}
+                                            alt={`Photo by ${metadata.uploadedBy || 'Unknown Guest'}`}
+                                            className="w-full h-48 object-cover rounded mb-2"
+                                            onError={(e) => {
+                                                console.error('Image load error:', imageUrl);
+                                                setImageErrors(prev => ({
+                                                    ...prev,
+                                                    [photo.id]: true
+                                                }));
+                                            }}
+                                            loading="lazy"
+                                        />
+                                    </div>
                                     <div className="space-y-1">
                                         <p className="text-sm font-medium">
-                                            By: {metadata.uploadedBy || photo.name.split('_')[0]}
+                                            By: {metadata.uploadedBy || photo.uploadedBy || 'Unknown Guest'}
                                         </p>
                                         <p className="text-sm text-gray-600">
-                                            {metadata.uploadType || photo.name.split('_')[1]}
+                                            {metadata.uploadType || photo.uploadType || 'General'}
                                         </p>
                                         {metadata.deviceInfo && (
                                             <p className="text-xs text-gray-500">
@@ -818,7 +880,7 @@ function App() {
                                             </p>
                                         )}
                                         <a
-                                            href={photo.webViewLink}
+                                            href={imageUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="text-blue-500 hover:underline text-sm block"
@@ -865,258 +927,53 @@ function App() {
     return (
         <div className="min-h-screen bg-wedding-accent-light p-4">
             <div className="max-w-4xl mx-auto">
-                <header className="text-center mb-8">
-                    <h1 className="text-4xl font-serif text-wedding-purple-dark mb-2 relative inline-block">
-                        Wedding Photo Gallery
-                        <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
-                        <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
-                        <div className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
-                        <div className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
-                    </h1>
-                    <p className="text-wedding-purple">Welcome, {guestName}!</p>
-                </header>
+                {renderHeader()}
 
-                <div className="mb-6 flex space-x-4 justify-center">
-                    <button
-                        onClick={() => setSelectedTab('general')}
-                        className={`px-6 py-2 rounded-full shadow-md transition duration-300 ${
-                            selectedTab === 'general'
-                                ? 'bg-wedding-purple text-white'
-                                : 'bg-wedding-green-light text-wedding-purple hover:bg-wedding-green hover:text-white'
-                        }`}
-                    >
-                        General Upload
-                    </button>
-                    <button
-                        onClick={() => setSelectedTab('challenges')}
-                        className={`px-6 py-2 rounded-full shadow-md transition duration-300 ${
-                            selectedTab === 'challenges'
-                                ? 'bg-wedding-purple text-white'
-                                : 'bg-wedding-green-light text-wedding-purple hover:bg-wedding-green hover:text-white'
-                        }`}
-                    >
-                        Photo Challenges
-                    </button>
-                </div>
-
-                {selectedTab === 'general' && (
-                    <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-2 border-wedding-purple-light">
-                        <h2 className="text-2xl font-serif mb-4 text-wedding-purple-dark">Upload Photos</h2>
-                        <div className="space-y-4">
-                            <div className="border-2 border-dashed border-wedding-green rounded-lg p-6 text-center">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={handleFileSelection}
-                                    className="hidden"
-                                    id="file-upload"
-                                    disabled={loading || !gapiInited || !gisInited}
-                                />
-                                <label
-                                    htmlFor="file-upload"
-                                    className="cursor-pointer flex flex-col items-center justify-center"
-                                >
-                                    <Upload className="w-12 h-12 text-wedding-purple mb-2"/>
-                                    <p className="text-wedding-purple-dark">
-                                        Click to select up to {MAX_PHOTOS} photos
-                                        <br/>
-                                        <span className="text-sm text-wedding-purple">
-                                            (Max 10MB per image)
-                                        </span>
-                                    </p>
-                                </label>
-                            </div>
-
-                            {selectedFiles.length > 0 && (
-                                <div className="space-y-4">
-                                    <div className="max-h-60 overflow-y-auto">
-                                        {selectedFiles.map((file) => (
-                                            <div key={file.name}
-                                                 className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
-                                                <div className="flex-1">
-                                                    <p className="text-sm truncate text-wedding-purple-dark">{file.name}</p>
-                                                    <div className="w-full bg-wedding-green-light rounded-full h-2">
-                                                        <div
-                                                            className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
-                                                            style={{width: `${uploadProgress[file.name] || 0}%`}}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={() => removeFile(file.name)}
-                                                    className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
-                                                >
-                                                    <X className="w-4 h-4"/>
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <button
-                                        onClick={uploadFiles}
-                                        disabled={loading}
-                                        className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
-                                    >
-                                        {loading ? 'Uploading...' : `Upload ${selectedFiles.length} Photos`}
-                                    </button>
-                                </div>
-                            )}
+                {/* Show tabs and upload sections only when not in admin mode */}
+                {!isAdmin && (
+                    <>
+                        <div className="mb-6 flex space-x-4 justify-center">
+                            <button
+                                onClick={() => setSelectedTab('general')}
+                                className={`px-6 py-2 rounded-full shadow-md transition duration-300 ${
+                                    selectedTab === 'general'
+                                        ? 'bg-wedding-purple text-white'
+                                        : 'bg-wedding-green-light text-wedding-purple hover:bg-wedding-green hover:text-white'
+                                }`}
+                            >
+                                General Upload
+                            </button>
+                            <button
+                                onClick={() => setSelectedTab('challenges')}
+                                className={`px-6 py-2 rounded-full shadow-md transition duration-300 ${
+                                    selectedTab === 'challenges'
+                                        ? 'bg-wedding-purple text-white'
+                                        : 'bg-wedding-green-light text-wedding-purple hover:bg-wedding-green hover:text-white'
+                                }`}
+                            >
+                                Photo Challenges
+                            </button>
                         </div>
-                    </div>
+
+                        {selectedTab === 'general' && renderGeneralUpload()}
+                        {selectedTab === 'challenges' && renderChallenges()}
+                    </>
                 )}
 
-                {selectedTab === 'challenges' && (
-                    <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-2 border-wedding-purple-light">
-                        <h2 className="text-2xl font-serif mb-4 text-wedding-purple-dark">Photo Challenges</h2>
-                        <div className="space-y-6">
-                            {challenges.map((challenge) => (
-                                <div
-                                    key={challenge.id}
-                                    className={`border-2 rounded-lg p-6 relative ${
-                                        completedChallenges.has(challenge.id)
-                                            ? 'bg-wedding-green-light/20 border-wedding-green'
-                                            : 'bg-white border-wedding-purple-light'
-                                    }`}
-                                >
-                                    {completedChallenges.has(challenge.id) && (
-                                        <div className="absolute top-4 right-4">
-                                            <CheckCircle className="text-wedding-green-dark" size={24}/>
-                                        </div>
-                                    )}
-
-                                    <div className="mb-4">
-                                        <h3 className="text-xl font-semibold text-wedding-purple-dark mb-2">
-                                            {challenge.title}
-                                        </h3>
-                                        <p className="text-wedding-purple">
-                                            {challenge.description}
-                                        </p>
-                                    </div>
-
-                                    <div className="border-2 border-dashed border-wedding-green rounded-lg p-4 text-center">
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => handleChallengeFileSelect(e, challenge.id)}
-                                            className="hidden"
-                                            id={`challenge-upload-${challenge.id}`}
-                                            disabled={loading || !gapiInited || !gisInited}
-                                        />
-                                        <label
-                                            htmlFor={`challenge-upload-${challenge.id}`}
-                                            className={`cursor-pointer flex flex-col items-center justify-center p-4 rounded-lg transition-colors ${
-                                                completedChallenges.has(challenge.id)
-                                                    ? 'bg-wedding-green-light/20 hover:bg-wedding-green-light/40'
-                                                    : 'bg-wedding-accent-light hover:bg-wedding-green-light/20'
-                                            }`}
-                                        >
-                                            {completedChallenges.has(challenge.id) ? (
-                                                <>
-                                                    <div className="mb-2 text-wedding-green-dark">
-                                                        <CheckCircle size={32}/>
-                                                    </div>
-                                                    <p className="text-wedding-purple-dark font-medium">
-                                                        Challenge Completed!
-                                                    </p>
-                                                    <p className="text-sm text-wedding-purple mt-1">
-                                                        Click to upload another photo
-                                                    </p>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <div className="mb-2 text-wedding-purple">
-                                                        <Upload size={32}/>
-                                                    </div>
-                                                    <p className="text-wedding-purple-dark font-medium">
-                                                        Select Photo for this Challenge
-                                                    </p>
-                                                    <p className="text-sm text-wedding-purple mt-1">
-                                                        Click to select an image
-                                                    </p>
-                                                </>
-                                            )}
-                                        </label>
-                                    </div>
-
-                                    {selectedChallengeFiles[challenge.id] && (
-                                        <div className="mt-4 space-y-4">
-                                            <div className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
-                                                <div className="flex-1">
-                                                    <p className="text-sm truncate text-wedding-purple-dark">
-                                                        {selectedChallengeFiles[challenge.id].name}
-                                                    </p>
-                                                    {challengeUploadProgress[challenge.id] > 0 && (
-                                                        <div className="w-full bg-wedding-green-light rounded-full h-2">
-                                                            <div
-                                                                className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
-                                                                style={{width: `${challengeUploadProgress[challenge.id]}%`}}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    onClick={() => removeChallengeFile(challenge.id)}
-                                                    className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
-                                                >
-                                                    <X className="w-4 h-4"/>
-                                                </button>
-                                            </div>
-
-                                            <button
-                                                onClick={() => uploadChallengeFile(selectedChallengeFiles[challenge.id], challenge.id)}
-                                                disabled={loading}
-                                                className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
-                                            >
-                                                {loading && activeChallenge === challenge.id
-                                                    ? 'Uploading...'
-                                                    : 'Upload Photo'
-                                                }
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
                 {renderPhotoGallery()}
             </div>
 
-            {showAdminModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                    <div className="bg-white p-6 rounded-lg max-w-md w-full">
-                        <h2 className="text-2xl font-serif mb-4">Admin Access</h2>
-                        <form onSubmit={handleAdminLogin} className="space-y-4">
-                            <input
-                                type="password"
-                                placeholder="Enter admin password"
-                                value={adminPassword}
-                                onChange={(e) => setAdminPassword(e.target.value)}
-                                className="w-full p-2 border border-gray-300 rounded"
-                                required
-                            />
-                            <div className="flex space-x-4">
-                                <button
-                                    type="submit"
-                                    className="flex-1 bg-pink-500 text-white p-2 rounded hover:bg-pink-600 transition"
-                                >
-                                    Login
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAdminModal(false)}
-                                    className="flex-1 bg-gray-300 text-gray-700 p-2 rounded hover:bg-gray-400 transition"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+            {showAdminModal && renderAdminModal()}
+            {notification && (
+                <Toast
+                    message={notification.message}
+                    type={notification.type}
+                    onClose={() => setNotification(null)}
+                />
             )}
         </div>
     );
-}
+};
+
 
 export default App;
