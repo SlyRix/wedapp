@@ -628,22 +628,32 @@ function App() {
         );
     };
     const renderHeader = () => (
-        <header className="relative mb-8 pt-16"> {/* Added pt-16 for top padding */}
+        <header className="relative mb-8">
+            <div className="text-center">
+                <h1 className="text-4xl font-serif text-wedding-purple-dark mb-2 relative inline-block">
+                    Engagement Photo Gallery
+                    <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
+                    <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
+                    <div className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
+                    <div className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
+                </h1>
+                <p className="text-wedding-purple mt-6">
+                    {isAdmin ? 'Admin View - All Photos' : `Welcome, ${guestName}!`}
+                </p>
+            </div>
             {!isAdmin && (
                 <button
                     onClick={() => setShowAdminModal(true)}
-                    className="absolute top-2 right-2 p-2 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300 bg-white rounded-full shadow-md hover:shadow-lg z-10" // Added z-10
+                    className="fixed bottom-4 right-4 p-2 text-gray-400 hover:text-wedding-purple transition-colors duration-300 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:shadow-md"
                     title="Admin Access"
                 >
-                    <Settings className="w-6 h-6"/>
+                    <Settings className="w-5 h-5" />
                 </button>
             )}
             {isAdmin && (
-                <div className="absolute top-2 right-2 flex items-center space-x-3 z-10"> {/* Adjusted positioning */}
-                    <div
-                        className="px-3 py-2 bg-wedding-green-light text-wedding-green-dark rounded-full shadow-md flex items-center space-x-2">
-                        <span className="text-sm font-medium">Admin Mode</span>
-                        <CheckCircle className="w-4 h-4"/>
+                <div className="fixed bottom-4 right-4 flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm px-2 py-1">
+                    <div className="text-xs text-wedding-green-dark">
+                        Admin
                     </div>
                     <button
                         onClick={() => {
@@ -652,31 +662,15 @@ function App() {
                             setPhotos([]);
                             fetchPhotos(false);
                         }}
-                        className="p-2 text-wedding-purple-dark hover:text-wedding-purple transition-colors duration-300 bg-white rounded-full shadow-md hover:shadow-lg"
-                        title="Exit Admin Mode"
+                        className="p-1 text-gray-400 hover:text-wedding-purple"
                     >
-                        <X className="w-4 h-4"/>
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
             )}
-            <div className="text-center">
-                <h1 className="text-4xl font-serif text-wedding-purple-dark mb-2 relative inline-block">
-                    Engagement Photo Gallery
-                    <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
-                    <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
-                    <div
-                        className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
-                    <div
-                        className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
-                </h1>
-                <p className="text-wedding-purple mt-6">
-                    {isAdmin ? 'Admin View - All Photos' : `Welcome, ${guestName}!`}
-                </p>
-            </div>
         </header>
     );
-
-// Add this modal render function
+    // Add this modal render function
     const renderAdminModal = () => (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-8 rounded-lg max-w-md w-full border-2 border-wedding-purple relative">
