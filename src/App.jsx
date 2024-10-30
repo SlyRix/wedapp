@@ -1,6 +1,9 @@
 import React, {useState, useEffect} from 'react';
 import {CheckCircle, Upload, X} from 'lucide-react';
 
+const API_URL = 'http://slyrix.com:3001/api';
+
+
 const GOOGLE_CLIENT_ID = '149658260490-pf8nbtpm23macvlorrmungbld2kia9nq.apps.googleusercontent.com';
 const ADMIN_PASSWORD = 'happy';
 const API_KEY = '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';
@@ -105,11 +108,10 @@ function App() {
 
 
     useEffect(() => {
-        if (isLoggedIn && gapiInited && gisInited) {
+        if (isLoggedIn) {
             fetchPhotos();
         }
-    }, [isLoggedIn, gapiInited, gisInited]); // Will fetch photos when user logs in and APIs are ready
-
+    }, [isLoggedIn]);
 
     const getBrowserInfo = (userAgent) => {
         if (/Chrome/i.test(userAgent)) return 'Chrome';
@@ -287,38 +289,35 @@ function App() {
 
     const uploadFiles = async () => {
         if (selectedFiles.length === 0) return;
-
         setLoading(true);
+
         try {
-            await checkAndRefreshToken();
-            if (!gapi.client.getToken()) {
-                return new Promise((resolve, reject) => {
-                    try {
-                        tokenClient.callback = async (resp) => {
-                            if (resp.error !== undefined) {
-                                reject(resp);
-                                return;
-                            }
-                            try {
-                                await uploadMultipleFiles();
-                                resolve();
-                            } catch (err) {
-                                reject(err);
-                            }
-                        };
-                        tokenClient.requestAccessToken();
-                    } catch (err) {
-                        reject(err);
-                    }
-                });
-            } else {
-                await uploadMultipleFiles();
-            }
-        } catch (err) {
-            console.error('Error uploading files:', err);
+            const formData = new FormData();
+            selectedFiles.forEach((file) => {
+                formData.append('photos', file);
+            });
+
+            formData.append('uploadedBy', guestName);
+            formData.append('uploadType', 'General');
+            formData.append('deviceInfo', deviceInfo);
+
+            await uploadFiles(formData, (progress) => {
+                setUploadProgress(prev => ({
+                    ...prev,
+                    total: progress
+                }));
+            });
+
+            alert('Photos uploaded successfully!');
+            setSelectedFiles([]);
+            setUploadProgress({});
+            await fetchPhotos();
+        } catch (error) {
+            console.error('Error uploading files:', error);
             alert('Error uploading photos. Please try again.');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const uploadMultipleFiles = async () => {
@@ -426,36 +425,54 @@ function App() {
         setActiveChallenge(challengeId);
 
         try {
-            if (!gapi.client.getToken()) {
-                tokenClient.callback = async (resp) => {
-                    if (resp.error !== undefined) {
-                        throw resp;
-                    }
-                    await performChallengeUpload(file, challengeId);
-                };
-                tokenClient.requestAccessToken({prompt: 'consent'});
-            } else {
-                await performChallengeUpload(file, challengeId);
+            const challenge = challenges.find(c => c.id === challengeId);
+            const formData = new FormData();
+
+            formData.append('photo', file);
+            formData.append('uploadedBy', guestName);
+            formData.append('challengeId', challengeId.toString());
+            formData.append('challengeTitle', challenge.title);
+            formData.append('deviceInfo', deviceInfo);
+
+            const response = await fetch(`${API_URL}/challenge-upload`, {
+                method: 'POST',
+                body: formData,
+                // Don't set Content-Type header, let the browser handle it
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        } catch (err) {
-            console.error('Error uploading challenge photo:', err);
+
+            const data = await response.json();
+            console.log('Challenge upload successful:', data);
+
+            // Update completed challenges
+            const updatedChallenges = new Set(completedChallenges);
+            updatedChallenges.add(challengeId);
+            setCompletedChallenges(updatedChallenges);
+            localStorage.setItem(`completedChallenges_${guestName}`,
+                JSON.stringify([...updatedChallenges]));
+
+            alert('Challenge photo uploaded successfully!');
+            setSelectedChallengeFiles(prev => {
+                const updated = {...prev};
+                delete updated[challengeId];
+                return updated;
+            });
+            setChallengeUploadProgress(prev => {
+                const updated = {...prev};
+                delete updated[challengeId];
+                return updated;
+            });
+            await fetchPhotos();
+        } catch (error) {
+            console.error('Error uploading challenge photo:', error);
             alert('Error uploading photo. Please try again.');
+        } finally {
+            setLoading(false);
+            setActiveChallenge(null);
         }
-
-        setLoading(false);
-        setActiveChallenge(null);
-
-        // Clear the selected file after upload
-        setSelectedChallengeFiles(prev => {
-            const updated = {...prev};
-            delete updated[challengeId];
-            return updated;
-        });
-        setChallengeUploadProgress(prev => {
-            const updated = {...prev};
-            delete updated[challengeId];
-            return updated;
-        });
     };
 
 // Add this new function to handle the actual upload:
@@ -536,56 +553,23 @@ function App() {
 
 
     const fetchPhotos = async () => {
-        if (!gapi.client.getToken()) {
-            console.log('No auth token available');
-            return;
-        }
-
         setLoading(true);
         try {
-            const folderResponse = await gapi.client.drive.files.list({
-                q: "name='Wedding Photos' and mimeType='application/vnd.google-apps.folder'",
-                fields: 'files(id, name)',
-                spaces: 'drive'
-            });
-
-            if (folderResponse.result.files.length === 0) {
-                console.log('No Wedding Photos folder found');
-                setLoading(false);
-                return;
+            const response = await fetch(`${API_URL}/photos${isAdmin ? '' : `?uploadedBy=${guestName}`}`);
+            if (!response.ok) throw new Error('Failed to fetch photos');
+            const data = await response.json();
+            setPhotos(data);
+            if (isAdmin) {
+                setAllPhotos(data);
             }
-
-            const folderId = folderResponse.result.files[0].id;
-
-            const response = await gapi.client.drive.files.list({
-                q: `'${folderId}' in parents and mimeType contains 'image/' and trashed=false`,
-                fields: 'files(id, name, webViewLink, thumbnailLink, description)',
-                orderBy: 'createdTime desc',
-                pageSize: 100,
-                supportsAllDrives: true
-            });
-
-            // Process the files and generate direct thumbnail URLs
-            const processedFiles = response.result.files.map(file => {
-                return {
-                    ...file,
-                    // Generate a direct thumbnail URL using the file ID
-                    imageUrl: file.thumbnailLink // Use the thumbnailLink directly without access token
-                };
-            });
-
-            console.log('Processed files:', processedFiles);
-
-            setAllPhotos(processedFiles);
-            const userFiles = processedFiles.filter(photo => photo.name.startsWith(guestName));
-            setPhotos(userFiles);
-
-        } catch (err) {
-            console.error('Error in fetchPhotos:', err);
+        } catch (error) {
+            console.error('Error fetching photos:', error);
+            alert('Error loading photos. Please try again.');
         } finally {
             setLoading(false);
         }
     };
+
 
     const handleChallengeFileSelect = (e, challengeId) => {
         const file = e.target.files[0];
@@ -852,10 +836,10 @@ function App() {
     };
     if (!isLoggedIn) {
         return (
-            <div className="min-h-screen bg-pink-50 flex items-center justify-center">
-                <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-                    <h1 className="text-3xl font-serif text-center mb-6 text-gray-800">
-                        Welcome to Our Engagement
+            <div className="min-h-screen bg-wedding-accent-light flex items-center justify-center bg-[url('/paisley-pattern.png')] bg-opacity-5">
+                <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full border-2 border-wedding-purple">
+                    <h1 className="text-3xl font-serif text-center mb-6 text-wedding-purple-dark">
+                        Welcome to Our Wedding Celebration
                     </h1>
                     <form onSubmit={handleLogin} className="space-y-4">
                         <input
@@ -863,12 +847,12 @@ function App() {
                             placeholder="Enter your name"
                             value={guestName}
                             onChange={(e) => setGuestName(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded"
+                            className="w-full p-2 border-2 border-wedding-green focus:ring-wedding-purple focus:border-wedding-purple rounded"
                             required
                         />
                         <button
                             type="submit"
-                            className="w-full bg-pink-500 text-white p-2 rounded hover:bg-pink-600 transition"
+                            className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 shadow-lg"
                         >
                             Join the Celebration
                         </button>
@@ -879,76 +863,138 @@ function App() {
     }
 
     return (
-        <div className="min-h-screen bg-pink-50 p-4">
+        <div className="min-h-screen bg-wedding-accent-light p-4">
             <div className="max-w-4xl mx-auto">
                 <header className="text-center mb-8">
-                    <h1 className="text-4xl font-serif text-gray-800 mb-2">Engagement Photo Gallery</h1>
-                    <p className="text-gray-600">Welcome, {guestName}!</p>
-                    {!isAdmin && (
-                        <button
-                            onClick={() => setShowAdminModal(true)}
-                            className="mt-2 text-sm text-gray-500 hover:text-gray-700"
-                        >
-                            Admin Access
-                        </button>
-                    )}
+                    <h1 className="text-4xl font-serif text-wedding-purple-dark mb-2 relative inline-block">
+                        Wedding Photo Gallery
+                        <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
+                        <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
+                        <div className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
+                        <div className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
+                    </h1>
+                    <p className="text-wedding-purple">Welcome, {guestName}!</p>
                 </header>
 
                 <div className="mb-6 flex space-x-4 justify-center">
                     <button
                         onClick={() => setSelectedTab('general')}
-                        className={`px-4 py-2 rounded ${
+                        className={`px-6 py-2 rounded-full shadow-md transition duration-300 ${
                             selectedTab === 'general'
-                                ? 'bg-pink-500 text-white'
-                                : 'bg-white text-gray-700 hover:bg-pink-100'
+                                ? 'bg-wedding-purple text-white'
+                                : 'bg-wedding-green-light text-wedding-purple hover:bg-wedding-green hover:text-white'
                         }`}
                     >
                         General Upload
                     </button>
                     <button
                         onClick={() => setSelectedTab('challenges')}
-                        className={`px-4 py-2 rounded ${
+                        className={`px-6 py-2 rounded-full shadow-md transition duration-300 ${
                             selectedTab === 'challenges'
-                                ? 'bg-pink-500 text-white'
-                                : 'bg-white text-gray-700 hover:bg-pink-100'
+                                ? 'bg-wedding-purple text-white'
+                                : 'bg-wedding-green-light text-wedding-purple hover:bg-wedding-green hover:text-white'
                         }`}
                     >
                         Photo Challenges
                     </button>
                 </div>
 
-                {selectedTab === 'general' && renderGeneralUpload()}
+                {selectedTab === 'general' && (
+                    <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-2 border-wedding-purple-light">
+                        <h2 className="text-2xl font-serif mb-4 text-wedding-purple-dark">Upload Photos</h2>
+                        <div className="space-y-4">
+                            <div className="border-2 border-dashed border-wedding-green rounded-lg p-6 text-center">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleFileSelection}
+                                    className="hidden"
+                                    id="file-upload"
+                                    disabled={loading || !gapiInited || !gisInited}
+                                />
+                                <label
+                                    htmlFor="file-upload"
+                                    className="cursor-pointer flex flex-col items-center justify-center"
+                                >
+                                    <Upload className="w-12 h-12 text-wedding-purple mb-2"/>
+                                    <p className="text-wedding-purple-dark">
+                                        Click to select up to {MAX_PHOTOS} photos
+                                        <br/>
+                                        <span className="text-sm text-wedding-purple">
+                                            (Max 10MB per image)
+                                        </span>
+                                    </p>
+                                </label>
+                            </div>
+
+                            {selectedFiles.length > 0 && (
+                                <div className="space-y-4">
+                                    <div className="max-h-60 overflow-y-auto">
+                                        {selectedFiles.map((file) => (
+                                            <div key={file.name}
+                                                 className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
+                                                <div className="flex-1">
+                                                    <p className="text-sm truncate text-wedding-purple-dark">{file.name}</p>
+                                                    <div className="w-full bg-wedding-green-light rounded-full h-2">
+                                                        <div
+                                                            className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
+                                                            style={{width: `${uploadProgress[file.name] || 0}%`}}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => removeFile(file.name)}
+                                                    className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
+                                                >
+                                                    <X className="w-4 h-4"/>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={uploadFiles}
+                                        disabled={loading}
+                                        className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
+                                    >
+                                        {loading ? 'Uploading...' : `Upload ${selectedFiles.length} Photos`}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {selectedTab === 'challenges' && (
-                    <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-                        <h2 className="text-2xl font-serif mb-4">Photo Challenges</h2>
+                    <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-2 border-wedding-purple-light">
+                        <h2 className="text-2xl font-serif mb-4 text-wedding-purple-dark">Photo Challenges</h2>
                         <div className="space-y-6">
                             {challenges.map((challenge) => (
                                 <div
                                     key={challenge.id}
-                                    className={`border rounded-lg p-6 relative ${
+                                    className={`border-2 rounded-lg p-6 relative ${
                                         completedChallenges.has(challenge.id)
-                                            ? 'bg-green-50 border-green-200'
-                                            : 'bg-white border-gray-200'
+                                            ? 'bg-wedding-green-light/20 border-wedding-green'
+                                            : 'bg-white border-wedding-purple-light'
                                     }`}
                                 >
                                     {completedChallenges.has(challenge.id) && (
                                         <div className="absolute top-4 right-4">
-                                            <CheckCircle className="text-green-500" size={24}/>
+                                            <CheckCircle className="text-wedding-green-dark" size={24}/>
                                         </div>
                                     )}
 
                                     <div className="mb-4">
-                                        <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                                        <h3 className="text-xl font-semibold text-wedding-purple-dark mb-2">
                                             {challenge.title}
                                         </h3>
-                                        <p className="text-gray-600">
+                                        <p className="text-wedding-purple">
                                             {challenge.description}
                                         </p>
                                     </div>
 
-                                    <div
-                                        className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                                    <div className="border-2 border-dashed border-wedding-green rounded-lg p-4 text-center">
                                         <input
                                             type="file"
                                             accept="image/*"
@@ -961,31 +1007,31 @@ function App() {
                                             htmlFor={`challenge-upload-${challenge.id}`}
                                             className={`cursor-pointer flex flex-col items-center justify-center p-4 rounded-lg transition-colors ${
                                                 completedChallenges.has(challenge.id)
-                                                    ? 'bg-green-50 hover:bg-green-100'
-                                                    : 'bg-gray-50 hover:bg-gray-100'
+                                                    ? 'bg-wedding-green-light/20 hover:bg-wedding-green-light/40'
+                                                    : 'bg-wedding-accent-light hover:bg-wedding-green-light/20'
                                             }`}
                                         >
                                             {completedChallenges.has(challenge.id) ? (
                                                 <>
-                                                    <div className="mb-2 text-green-500">
+                                                    <div className="mb-2 text-wedding-green-dark">
                                                         <CheckCircle size={32}/>
                                                     </div>
-                                                    <p className="text-green-600 font-medium">
+                                                    <p className="text-wedding-purple-dark font-medium">
                                                         Challenge Completed!
                                                     </p>
-                                                    <p className="text-sm text-green-500 mt-1">
+                                                    <p className="text-sm text-wedding-purple mt-1">
                                                         Click to upload another photo
                                                     </p>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <div className="mb-2 text-gray-400">
+                                                    <div className="mb-2 text-wedding-purple">
                                                         <Upload size={32}/>
                                                     </div>
-                                                    <p className="text-gray-600 font-medium">
+                                                    <p className="text-wedding-purple-dark font-medium">
                                                         Select Photo for this Challenge
                                                     </p>
-                                                    <p className="text-sm text-gray-500 mt-1">
+                                                    <p className="text-sm text-wedding-purple mt-1">
                                                         Click to select an image
                                                     </p>
                                                 </>
@@ -995,16 +1041,15 @@ function App() {
 
                                     {selectedChallengeFiles[challenge.id] && (
                                         <div className="mt-4 space-y-4">
-                                            <div
-                                                className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                            <div className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
                                                 <div className="flex-1">
-                                                    <p className="text-sm truncate">
+                                                    <p className="text-sm truncate text-wedding-purple-dark">
                                                         {selectedChallengeFiles[challenge.id].name}
                                                     </p>
                                                     {challengeUploadProgress[challenge.id] > 0 && (
-                                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                                        <div className="w-full bg-wedding-green-light rounded-full h-2">
                                                             <div
-                                                                className="bg-pink-500 h-2 rounded-full transition-all duration-300"
+                                                                className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
                                                                 style={{width: `${challengeUploadProgress[challenge.id]}%`}}
                                                             />
                                                         </div>
@@ -1012,7 +1057,7 @@ function App() {
                                                 </div>
                                                 <button
                                                     onClick={() => removeChallengeFile(challenge.id)}
-                                                    className="ml-2 text-gray-500 hover:text-red-500"
+                                                    className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
                                                 >
                                                     <X className="w-4 h-4"/>
                                                 </button>
@@ -1021,7 +1066,7 @@ function App() {
                                             <button
                                                 onClick={() => uploadChallengeFile(selectedChallengeFiles[challenge.id], challenge.id)}
                                                 disabled={loading}
-                                                className="w-full bg-pink-500 text-white p-2 rounded hover:bg-pink-600 transition disabled:bg-gray-300"
+                                                className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
                                             >
                                                 {loading && activeChallenge === challenge.id
                                                     ? 'Uploading...'
