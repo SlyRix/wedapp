@@ -29,22 +29,43 @@ const challenges = [
     {
         id: 1,
         title: 'Catch the Groom',
-        description: 'Take a fun picture with Rushel and Sivani'
+        description: 'Take a fun picture with Rushel and Sivani',
+        isPrivate: false
+
     },
     {
         id: 2,
         title: 'Best Outfit of the Day',
-        description: 'Capture the most stylish guest!'
+        description: 'Capture the most stylish guest!',
+        isPrivate: false
+
     },
     {
         id: 3,
         title: 'Take a selfie',
-        description: 'Click a selfie'
+        description: 'Click a selfie',
+        isPrivate: false
+
     },
     {
         id: 4,
+        title: 'Friend Squad',
+        description: 'Group photos with friends from each side',
+        isPrivate: false
+
+    },
+    {
+        id: 5,
+        title: 'Love Notes',
+        description: 'Share your wishes for Rushel and Sivani! Open your phone\'s notes app, write a heartfelt message, take a screenshot, and upload it (is private)',
+        isPrivate: true
+
+    },
+    {
+        id: 6,
         title: 'Sweet Moments',
-        description: 'Share touching moments from the celebration'
+        description: 'Share touching moments from the celebration',
+        isPrivate: false
     },
 ];
 
@@ -359,7 +380,6 @@ function App() {
             const formData = new FormData();
 
             formData.append('photo', file);
-            // Add each field separately instead of relying on metadata parsing
             formData.append('uploadedBy', guestName);
             formData.append('challengeId', challengeId.toString());
             formData.append('challengeTitle', challenge.title);
@@ -368,9 +388,7 @@ function App() {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', `${API_URL}/challenge-upload`, true);
 
-            // Set up promise to handle the upload
             const uploadPromise = new Promise((resolve, reject) => {
-                // Handle progress
                 xhr.upload.onprogress = (event) => {
                     if (event.lengthComputable) {
                         const progressPercent = Math.round((event.loaded / event.total) * 100);
@@ -381,17 +399,9 @@ function App() {
                     }
                 };
 
-                // Handle network errors
-                xhr.onerror = () => {
-                    reject(new Error('Network error occurred during upload'));
-                };
+                xhr.onerror = () => reject(new Error('Network error occurred during upload'));
+                xhr.ontimeout = () => reject(new Error('Upload request timed out'));
 
-                // Handle timeout
-                xhr.ontimeout = () => {
-                    reject(new Error('Upload request timed out'));
-                };
-
-                // Handle response
                 xhr.onload = () => {
                     if (xhr.status >= 200 && xhr.status < 300) {
                         resolve(JSON.parse(xhr.response));
@@ -401,43 +411,30 @@ function App() {
                 };
             });
 
-            // Set timeout to 30 seconds
             xhr.timeout = 30000;
-
-            // Send the request
             xhr.send(formData);
 
-            // Wait for upload to complete
             const data = await uploadPromise;
-
             console.log('Challenge upload successful:', data);
-
-            // Update completed challenges
-            const updatedChallenges = new Set(completedChallenges);
-            updatedChallenges.add(challengeId);
-            setCompletedChallenges(updatedChallenges);
-            localStorage.setItem(`completedChallenges_${guestName}`,
-                JSON.stringify([...updatedChallenges]));
-
-            setNotification({
-                message: 'Challenge photo uploaded successfully!',
-                type: 'success'
-            });
             await fetchChallengePhotos(challengeId);
+            await fetchPhotos();
 
+            // Reset upload state after successful upload
             setSelectedChallengeFiles(prev => {
                 const updated = {...prev};
                 delete updated[challengeId];
                 return updated;
             });
-
             setChallengeUploadProgress(prev => {
                 const updated = {...prev};
                 delete updated[challengeId];
                 return updated;
             });
 
-            await fetchPhotos();
+            setNotification({
+                message: 'Challenge photo uploaded successfully!',
+                type: 'success'
+            });
 
         } catch (error) {
             console.error('Error uploading challenge photo:', error);
@@ -463,6 +460,16 @@ function App() {
         const device = getDeviceInfo(userAgent, platform);
         setDeviceInfo(`${device} - ${browser}`);
     }, []);
+    useEffect(() => {
+        const completed = new Set();
+        Object.entries(challengePhotos).forEach(([challengeId, photos]) => {
+            if (photos.some(photo => photo.uploadedBy === guestName)) {
+                completed.add(parseInt(challengeId));
+            }
+        });
+        setCompletedChallenges(completed);
+    }, [challengePhotos, guestName]);
+
     const fetchChallengePhotos = async (challengeId) => {
         try {
             const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
@@ -548,15 +555,10 @@ function App() {
         e.preventDefault();
         if (guestName.trim()) {
             setIsLoggedIn(true);
-            const savedChallenges = localStorage.getItem(`completedChallenges_${guestName}`);
-            if (savedChallenges) {
-                const completedIds = JSON.parse(savedChallenges);
-                setCompletedChallenges(new Set(completedIds));
-                // Fetch photos for completed challenges
-                completedIds.forEach(id => {
-                    fetchChallengePhotos(id);
-                });
-            }
+            fetchPhotos();
+            challenges.forEach(challenge => {
+                fetchChallengePhotos(challenge.id);
+            });
         }
     };
 
@@ -634,8 +636,10 @@ function App() {
                     Engagement Photo Gallery
                     <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
                     <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
-                    <div className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
-                    <div className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
+                    <div
+                        className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
+                    <div
+                        className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
                 </h1>
                 <p className="text-wedding-purple mt-6">
                     {isAdmin ? 'Admin View - All Photos' : `Welcome, ${guestName}!`}
@@ -647,11 +651,12 @@ function App() {
                     className="fixed bottom-4 right-4 p-2 text-gray-400 hover:text-wedding-purple transition-colors duration-300 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:shadow-md"
                     title="Admin Access"
                 >
-                    <Settings className="w-5 h-5" />
+                    <Settings className="w-5 h-5"/>
                 </button>
             )}
             {isAdmin && (
-                <div className="fixed bottom-4 right-4 flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm px-2 py-1">
+                <div
+                    className="fixed bottom-4 right-4 flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm px-2 py-1">
                     <div className="text-xs text-wedding-green-dark">
                         Admin
                     </div>
@@ -664,7 +669,7 @@ function App() {
                         }}
                         className="p-1 text-gray-400 hover:text-wedding-purple"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4"/>
                     </button>
                 </div>
             )}
@@ -792,132 +797,160 @@ function App() {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-2 border-wedding-purple-light">
             <h2 className="text-2xl font-serif mb-4 text-wedding-purple-dark">Photo Challenges</h2>
             <div className="space-y-6">
-                {challenges.map((challenge) => (
-                    <div
-                        key={challenge.id}
-                        className={`border-2 rounded-lg p-6 relative ${
-                            completedChallenges.has(challenge.id)
-                                ? 'bg-wedding-green-light/20 border-wedding-green'
-                                : 'bg-white border-wedding-purple-light'
-                        }`}
-                    >
-                        {completedChallenges.has(challenge.id) && (
-                            <div className="absolute top-4 right-4">
-                                <CheckCircle className="text-wedding-green-dark" size={24}/>
+                {challenges.map((challenge) => {
+                    const hasUploadedPhoto = challengePhotos[challenge.id]?.some(
+                        photo => photo.uploadedBy === guestName
+                    ) && !challenge.isPrivate;
+
+                    return (
+                        <div
+                            key={challenge.id}
+                            className={`border-2 rounded-lg p-6 relative ${
+                                completedChallenges.has(challenge.id)
+                                    ? 'bg-wedding-green-light/20 border-wedding-green'
+                                    : 'bg-white border-wedding-purple-light'
+                            }`}
+                        >
+                            {completedChallenges.has(challenge.id) && (
+                                <div className="absolute top-4 right-4">
+                                    <CheckCircle className="text-wedding-green-dark" size={24} />
+                                </div>
+                            )}
+
+                            <div className="mb-4">
+                                <h3 className="text-xl font-semibold text-wedding-purple-dark mb-2">
+                                    {challenge.title}
+                                </h3>
+                                <p className="text-wedding-purple">
+                                    {challenge.description}
+                                </p>
                             </div>
-                        )}
 
-                        <div className="mb-4">
-                            <h3 className="text-xl font-semibold text-wedding-purple-dark mb-2">
-                                {challenge.title}
-                            </h3>
-                            <p className="text-wedding-purple">
-                                {challenge.description}
-                            </p>
-                        </div>
-
-                        <div className="border-2 border-dashed border-wedding-green rounded-lg p-4 text-center">
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleChallengeFileSelect(e, challenge.id)}
-                                className="hidden"
-                                id={`challenge-upload-${challenge.id}`}
-                                disabled={loading}
-                            />
-                            <label
-                                htmlFor={`challenge-upload-${challenge.id}`}
-                                className={`cursor-pointer flex flex-col items-center justify-center p-4 rounded-lg transition-colors ${
-                                    completedChallenges.has(challenge.id)
-                                        ? 'bg-wedding-green-light/20 hover:bg-wedding-green-light/40'
-                                        : 'bg-wedding-accent-light hover:bg-wedding-green-light/20'
-                                }`}
-                            >
-                                {completedChallenges.has(challenge.id) ? (
-                                    <>
-                                        <div className="mb-2 text-wedding-green-dark">
-                                            <CheckCircle size={32}/>
-                                        </div>
-                                        <p className="text-wedding-purple-dark font-medium">
-                                            Challenge Completed!
-                                        </p>
-                                        <p className="text-sm text-wedding-purple mt-1">
-                                            Click to upload another photo
-                                        </p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="mb-2 text-wedding-purple">
-                                            <Upload size={32}/>
-                                        </div>
-                                        <p className="text-wedding-purple-dark font-medium">
-                                            Select Photo for this Challenge
-                                        </p>
-                                        <p className="text-sm text-wedding-purple mt-1">
-                                            Click to select an image
-                                        </p>
-                                    </>
-                                )}
-                            </label>
-                        </div>
-
-                        {selectedChallengeFiles[challenge.id] && (
-                            <div className="mt-4 space-y-4">
-                                <div
-                                    className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
-                                    <div className="flex-1">
-                                        <p className="text-sm truncate text-wedding-purple-dark">
-                                            {selectedChallengeFiles[challenge.id].name}
-                                        </p>
-                                        {challengeUploadProgress[challenge.id] > 0 && (
-                                            <div className="w-full bg-wedding-green-light rounded-full h-2">
-                                                <div
-                                                    className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
-                                                    style={{width: `${challengeUploadProgress[challenge.id]}%`}}
-                                                />
+                            <div className="border-2 border-dashed border-wedding-green rounded-lg p-4 text-center">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleChallengeFileSelect(e, challenge.id)}
+                                    className="hidden"
+                                    id={`challenge-upload-${challenge.id}`}
+                                    disabled={loading}
+                                />
+                                <label
+                                    htmlFor={`challenge-upload-${challenge.id}`}
+                                    className={`cursor-pointer flex flex-col items-center justify-center p-4 rounded-lg transition-colors ${
+                                        completedChallenges.has(challenge.id)
+                                            ? 'bg-wedding-green-light/20 hover:bg-wedding-green-light/40'
+                                            : 'bg-wedding-accent-light hover:bg-wedding-green-light/20'
+                                    }`}
+                                >
+                                    {completedChallenges.has(challenge.id) ? (
+                                        <>
+                                            <div className="mb-2 text-wedding-green-dark">
+                                                <CheckCircle size={32} />
                                             </div>
-                                        )}
+                                            <p className="text-wedding-purple-dark font-medium">
+                                                Challenge Completed!
+                                            </p>
+                                            <p className="text-sm text-wedding-purple mt-1">
+                                                Click to upload another photo
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="mb-2 text-wedding-purple">
+                                                <Upload size={32} />
+                                            </div>
+                                            <p className="text-wedding-purple-dark font-medium">
+                                                Select Photo for this Challenge
+                                            </p>
+                                            <p className="text-sm text-wedding-purple mt-1">
+                                                Click to select an image
+                                            </p>
+                                        </>
+                                    )}
+                                </label>
+                            </div>
+
+                            {selectedChallengeFiles[challenge.id] && (
+                                <div className="mt-4 space-y-4">
+                                    <div className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
+                                        <div className="flex-1">
+                                            <p className="text-sm truncate text-wedding-purple-dark">
+                                                {selectedChallengeFiles[challenge.id].name}
+                                            </p>
+                                            {challengeUploadProgress[challenge.id] > 0 && (
+                                                <div className="w-full bg-wedding-green-light rounded-full h-2">
+                                                    <div
+                                                        className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
+                                                        style={{width: `${challengeUploadProgress[challenge.id]}%`}}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => removeChallengeFile(challenge.id)}
+                                            className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
                                     </div>
+
                                     <button
-                                        onClick={() => removeChallengeFile(challenge.id)}
-                                        className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
+                                        onClick={() => uploadChallengeFile(selectedChallengeFiles[challenge.id], challenge.id)}
+                                        disabled={loading}
+                                        className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
                                     >
-                                        <X className="w-4 h-4"/>
+                                        {loading && activeChallenge === challenge.id
+                                            ? 'Uploading...'
+                                            : 'Upload Photo'
+                                        }
                                     </button>
                                 </div>
+                            )}
 
-                                <button
-                                    onClick={() => uploadChallengeFile(selectedChallengeFiles[challenge.id], challenge.id)}
-                                    disabled={loading}
-                                    className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
-                                >
-                                    {loading && activeChallenge === challenge.id
-                                        ? 'Uploading...'
-                                        : 'Upload Photo'
-                                    }
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Challenge Photos Gallery */}
-                        {challengePhotos[challenge.id] && challengePhotos[challenge.id].length > 0 && (
-                            <div className="mt-6">
-                                <button
-                                    onClick={() => toggleChallenge(challenge.id)}
-                                    className="w-full flex justify-between items-center text-lg font-medium text-wedding-purple-dark p-2 hover:bg-wedding-green-light/10 rounded"
-                                >
-                                    <span>Challenge Photos ({challengePhotos[challenge.id].length})</span>
-                                    <ChevronDown
-                                        className={`transform transition-transform ${
-                                            expandedChallenges.has(challenge.id) ? 'rotate-180' : ''
-                                        }`}
-                                    />
-                                </button>
-                                {expandedChallenges.has(challenge.id) && (
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
-                                        {challengePhotos[challenge.id].map((photo) => (
-                                            <div key={photo.id}
-                                                 className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
+                            {hasUploadedPhoto && challengePhotos[challenge.id] && challengePhotos[challenge.id].length > 0 ? (
+                                <div className="mt-6">
+                                    <button
+                                        onClick={() => toggleChallenge(challenge.id)}
+                                        className="w-full flex justify-between items-center text-lg font-medium text-wedding-purple-dark p-2 hover:bg-wedding-green-light/10 rounded"
+                                    >
+                                        <span>Challenge Photos ({challengePhotos[challenge.id].length})</span>
+                                        <ChevronDown
+                                            className={`transform transition-transform ${
+                                                expandedChallenges.has(challenge.id) ? 'rotate-180' : ''
+                                            }`}
+                                        />
+                                    </button>
+                                    {expandedChallenges.has(challenge.id) && (
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
+                                            {challengePhotos[challenge.id].map((photo) => (
+                                                <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
+                                                    <img
+                                                        src={`${API_URL}/uploads/${photo.filename}`}
+                                                        alt={`Photo by ${photo.uploadedBy}`}
+                                                        className="w-full h-[200px] object-contain rounded"
+                                                        onClick={() => {
+                                                            setActiveChallenge(challenge.id);
+                                                            setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
+                                                        }}/>
+                                                    <p className="text-sm mt-1 text-wedding-purple">
+                                                        By: {photo.uploadedBy}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : challenge.isPrivate && !hasUploadedPhoto ? (
+                                <p className="text-sm text-gray-500 mt-4">
+                                    This is a private challenge. Only your own photos will be visible here.
+                                </p>
+                            ) : challenge.isPrivate ? (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
+                                    {challengePhotos[challenge.id]
+                                        .filter(photo => photo.uploadedBy === guestName) // Filter to show only the current user's photos
+                                        .map(photo => (
+                                            <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
                                                 <img
                                                     src={`${API_URL}/uploads/${photo.filename}`}
                                                     alt={`Photo by ${photo.uploadedBy}`}
@@ -925,22 +958,21 @@ function App() {
                                                     onClick={() => {
                                                         setActiveChallenge(challenge.id);
                                                         setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
-                                                    }}/>
+                                                    }}
+                                                />
                                                 <p className="text-sm mt-1 text-wedding-purple">
                                                     By: {photo.uploadedBy}
                                                 </p>
                                             </div>
                                         ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                ))}
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
-
     const renderPhotoGallery = () => {
         const getImageUrl = (filename) => {
             return `${API_URL}/uploads/${filename}`;
@@ -955,7 +987,8 @@ function App() {
             } catch (e) {
                 metadata = {};
             }
-            return metadata.uploadedBy === guestName || photo.uploadedBy === guestName;
+            return (metadata.uploadedBy === guestName || photo.uploadedBy === guestName) &&
+                !challenges.find(c => c.id === metadata.challengeId && c.isPrivate);
         });
 
         return (
