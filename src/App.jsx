@@ -3,7 +3,7 @@ import {
     CheckCircle, Upload, X, AlertCircle, Settings,
     LogIn, ChevronDown, ChevronLeft, ChevronRight,
     Heart, Camera, GemIcon, Star, Calendar,
-    FlowerIcon, Sparkles, Maximize2
+    FlowerIcon, Sparkles, Maximize2,LogOut
 } from 'lucide-react';
 import {motion, AnimatePresence} from 'framer-motion';
 import {Alert, AlertTitle} from "./components/ui/alert";
