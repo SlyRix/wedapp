@@ -75,8 +75,14 @@ function App() {
     const [expandedChallenges, setExpandedChallenges] = useState(new Set());
     const [challengePhotos, setChallengePhotos] = useState({});
     const [notification, setNotification] = useState(null);
-    const [guestName, setGuestName] = useState('');
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [guestName, setGuestName] = useState(() => {
+        // Initialize guestName from localStorage
+        return localStorage.getItem('guestName') || '';
+    });
+    const [isLoggedIn, setIsLoggedIn] = useState(() => {
+        // Initialize login state from localStorage
+        return !!localStorage.getItem('guestName');
+    });
     const [selectedTab, setSelectedTab] = useState('general');
     const [photos, setPhotos] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -545,6 +551,18 @@ function App() {
         setCompletedChallenges(completed);
     }, [challengePhotos, guestName]);
 
+    useEffect(() => {
+        const savedGuestName = localStorage.getItem('guestName');
+        if (savedGuestName) {
+            setGuestName(savedGuestName);
+            setIsLoggedIn(true);
+            fetchPhotos();
+            challenges.forEach(challenge => {
+                fetchChallengePhotos(challenge.id);
+            });
+        }
+    }, []);
+
     const fetchChallengePhotos = async (challengeId) => {
         try {
             const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
@@ -629,12 +647,25 @@ function App() {
     const handleLogin = (e) => {
         e.preventDefault();
         if (guestName.trim()) {
+            // Save to localStorage
+            localStorage.setItem('guestName', guestName.trim());
             setIsLoggedIn(true);
             fetchPhotos();
             challenges.forEach(challenge => {
                 fetchChallengePhotos(challenge.id);
             });
         }
+    };
+    const handleLogout = () => {
+        localStorage.removeItem('guestName');
+        setGuestName('');
+        setIsLoggedIn(false);
+        setPhotos([]);
+        setChallengePhotos({});
+        setNotification({
+            message: 'Logged out successfully',
+            type: 'success'
+        });
     };
 
     const handleAdminLogin = async (e) => {
@@ -686,7 +717,20 @@ function App() {
             animate={{y: 0, opacity: 1}}
             className="relative mb-12 pt-8"
         >
-            <div className="text-center relative h-32"> {/* Added fixed height container */}
+            {/* Add a container for the logout button in the top-right corner */}
+            <div className="absolute top-0 right-0 p-4">
+                <motion.button
+                    onClick={handleLogout}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="font-['Quicksand'] px-4 py-2 rounded-full bg-white shadow-md text-wedding-purple hover:bg-wedding-purple hover:text-white transition duration-300 flex items-center gap-2 border border-wedding-purple-light/30"
+                >
+                    <LogOut className="w-4 h-4"/>
+                    <span className="hidden sm:inline">Logout</span>
+                </motion.button>
+            </div>
+
+            <div className="text-center relative h-32">
                 {/* Animated heart background */}
                 <motion.div
                     animate={{
@@ -703,15 +747,17 @@ function App() {
                     <Heart className="w-20 h-20 text-wedding-purple-light/30 fill-wedding-purple-light/30" />
                 </motion.div>
 
-                {/* Text overlay */}
+                {/* Text overlay with adjusted flower positioning */}
                 <h1 className="font-['Great_Vibes'] text-6xl text-wedding-purple-dark relative z-10 pt-2">
-                    R & S
-                    <div className="absolute -left-8 top-1/2 -translate-y-1/2">
-                        <FlowerIcon className="w-6 h-6 text-wedding-green"/>
-                    </div>
-                    <div className="absolute -right-8 top-1/2 -translate-y-1/2">
-                        <FlowerIcon className="w-6 h-6 text-wedding-green"/>
-                    </div>
+                    <span className="relative inline-flex items-center">
+                        <div className="absolute -left-7 top-1/2 -translate-y-1/2">
+                            <FlowerIcon className="w-6 h-6 text-wedding-green"/>
+                        </div>
+                        R & S
+                        <div className="absolute -right-7 top-1/2 -translate-y-1/2">
+                            <FlowerIcon className="w-6 h-6 text-wedding-green"/>
+                        </div>
+                    </span>
                 </h1>
 
                 <motion.h2
@@ -741,7 +787,6 @@ function App() {
             </div>
         </motion.header>
     );
-
     const fontStyles = `
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
