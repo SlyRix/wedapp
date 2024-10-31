@@ -1,15 +1,16 @@
 import React, {useState, useEffect} from 'react';
 import {
-    CheckCircle,
-    Upload,
-    X,
-    AlertCircle,
-    Settings,
-    LogIn,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight
+    CheckCircle, Upload, X, AlertCircle, Settings,
+    LogIn, ChevronDown, ChevronLeft, ChevronRight,
+    Heart, Camera, GemIcon, Star, Calendar,
+    FlowerIcon, Sparkles, Maximize2
 } from 'lucide-react';
+import {motion, AnimatePresence} from 'framer-motion';
+import {Alert, AlertTitle} from "./components/ui/alert";
+import {Button} from "./components/ui/button";
+import {Card, CardContent} from "./components/ui/card";
+import {Badge} from "./components/ui/badge";
+import confetti from 'canvas-confetti';
 
 const API_URL = 'http://slyrix.com:3001/api';
 
@@ -104,7 +105,13 @@ function App() {
             });
         }
     }, [isLoggedIn]);
-
+    const triggerConfetti = () => {
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: {y: 0.6}
+        });
+    };
     const getBrowserInfo = (userAgent) => {
         if (/Chrome/i.test(userAgent)) return 'Chrome';
         if (/Firefox/i.test(userAgent)) return 'Firefox';
@@ -156,8 +163,11 @@ function App() {
         });
         setUploadProgress(initialProgress);
     };
-    const ImageModal = ({image, onClose}) => {
-        if (!image) return null;
+    const ImageModal = ({ image, onClose }) => {
+        const [touchStart, setTouchStart] = useState(null);
+        const [touchEnd, setTouchEnd] = useState(null);
+        const [isAnimating, setIsAnimating] = useState(false);
+        const minSwipeDistance = 50;
 
         // Determine if we're viewing challenge photos or regular gallery
         const isChallengeView = selectedTab === 'challenges';
@@ -170,57 +180,122 @@ function App() {
         );
 
         const handlePrev = (e) => {
-            e.stopPropagation();
-            if (currentIndex > 0) {
+            if (e) e.stopPropagation();
+            if (currentIndex > 0 && !isAnimating) {
+                setIsAnimating(true);
                 setSelectedImage(`${API_URL}/uploads/${photosToUse[currentIndex - 1].filename}`);
+                setTimeout(() => setIsAnimating(false), 300);
             }
         };
 
         const handleNext = (e) => {
-            e.stopPropagation();
-            if (currentIndex < photosToUse.length - 1) {
+            if (e) e.stopPropagation();
+            if (currentIndex < photosToUse.length - 1 && !isAnimating) {
+                setIsAnimating(true);
                 setSelectedImage(`${API_URL}/uploads/${photosToUse[currentIndex + 1].filename}`);
+                setTimeout(() => setIsAnimating(false), 300);
+            }
+        };
+
+        const onTouchStart = (e) => {
+            setTouchEnd(null);
+            setTouchStart(e.targetTouches[0].clientX);
+        };
+
+        const onTouchMove = (e) => {
+            setTouchEnd(e.targetTouches[0].clientX);
+        };
+
+        const onTouchEnd = () => {
+            if (!touchStart || !touchEnd) return;
+
+            const distance = touchStart - touchEnd;
+            const isLeftSwipe = distance > minSwipeDistance;
+            const isRightSwipe = distance < -minSwipeDistance;
+
+            if (isLeftSwipe && currentIndex < photosToUse.length - 1) {
+                handleNext();
+            }
+            if (isRightSwipe && currentIndex > 0) {
+                handlePrev();
             }
         };
 
         return (
-            <div
-                className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
                 onClick={onClose}
             >
-                <div className="max-w-[90vw] max-h-[90vh] relative">
-                    <img
+                <div
+                    className="relative w-full max-w-4xl h-full flex items-center justify-center"
+                    onTouchStart={onTouchStart}
+                    onTouchMove={onTouchMove}
+                    onTouchEnd={onTouchEnd}
+                >
+                    <motion.img
+                        key={image}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
                         src={image}
                         alt="Full size"
-                        className="max-w-full max-h-[90vh] object-contain"
+                        className="max-w-full max-h-[90vh] object-contain select-none"
                         onClick={e => e.stopPropagation()}
+                        draggable={false}
                     />
+
+                    {/* Close button */}
                     <button
                         onClick={onClose}
-                        className="absolute top-4 right-4 text-white hover:text-gray-300"
+                        className="absolute top-4 right-4 text-white hover:text-gray-300 z-50"
                     >
                         <X className="w-8 h-8"/>
                     </button>
 
-                    {currentIndex > 0 && (
-                        <button
-                            onClick={handlePrev}
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2 bg-black bg-opacity-50 rounded-full"
-                        >
-                            <ChevronLeft className="w-8 h-8"/>
-                        </button>
-                    )}
+                    {/* Navigation buttons - show on larger screens or when not swiping */}
+                    <div className="hidden md:block">
+                        {currentIndex > 0 && (
+                            <button
+                                onClick={handlePrev}
+                                className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2 bg-black bg-opacity-50 rounded-full transition-all"
+                            >
+                                <ChevronLeft className="w-8 h-8"/>
+                            </button>
+                        )}
 
-                    {currentIndex < photosToUse.length - 1 && (
-                        <button
-                            onClick={handleNext}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2 bg-black bg-opacity-50 rounded-full"
-                        >
-                            <ChevronRight className="w-8 h-8"/>
-                        </button>
-                    )}
+                        {currentIndex < photosToUse.length - 1 && (
+                            <button
+                                onClick={handleNext}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2 bg-black bg-opacity-50 rounded-full transition-all"
+                            >
+                                <ChevronRight className="w-8 h-8"/>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Mobile swipe indicator - only show briefly on mobile */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white text-sm md:hidden"
+                    >
+                        <div className="flex items-center gap-2 bg-black bg-opacity-50 px-4 py-2 rounded-full">
+                            <ChevronLeft className="w-4 h-4" />
+                            <span>Swipe to navigate</span>
+                            <ChevronRight className="w-4 h-4" />
+                        </div>
+                    </motion.div>
+
+                    {/* Image counter */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-3 py-1 rounded-full">
+                        {currentIndex + 1} / {photosToUse.length}
+                    </div>
                 </div>
-            </div>
+            </motion.div>
         );
     };
     const removeFile = (fileName) => {
@@ -594,87 +669,206 @@ function App() {
     };
 
 
-    const Toast = ({message, type = 'success', onClose}) => {
-        const bgColor = type === 'success' ? 'bg-wedding-green-light' : 'bg-red-100';
-        const textColor = type === 'success' ? 'text-wedding-green-dark' : 'text-red-800';
-        const Icon = type === 'success' ? CheckCircle : AlertCircle;
-
-        // Auto-dismiss after 3 seconds
-        React.useEffect(() => {
-            const timer = setTimeout(() => {
-                onClose();
-            }, 3000);
-            return () => clearTimeout(timer);
-        }, [onClose]);
-
-        return (
-            <div
-                className={`fixed top-4 right-4 z-50 ${bgColor} border-l-4 border-${type === 'success' ? 'wedding-green' : 'red-500'} p-4 rounded shadow-lg max-w-md transform transition-transform duration-300 ease-in-out`}>
-                <div className="flex items-start">
-                    <div className={`flex-shrink-0 ${textColor}`}>
-                        <Icon className="h-5 w-5"/>
-                    </div>
-                    <div className="ml-3">
-                        <p className={`text-sm font-medium ${textColor}`}>{message}</p>
-                    </div>
-                    <div className="ml-4 flex-shrink-0 flex">
-                        <button
-                            onClick={onClose}
-                            className={`inline-flex ${textColor} hover:opacity-75 focus:outline-none`}
-                        >
-                            <X className="h-5 w-5"/>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-    const renderHeader = () => (
-        <header className="relative mb-8">
-            <div className="text-center">
-                <h1 className="text-4xl font-serif text-wedding-purple-dark mb-2 relative inline-block">
-                    Engagement Photo Gallery
-                    <div className="absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 border-wedding-purple"></div>
-                    <div className="absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 border-wedding-purple"></div>
-                    <div
-                        className="absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 border-wedding-purple"></div>
-                    <div
-                        className="absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 border-wedding-purple"></div>
-                </h1>
-                <p className="text-wedding-purple mt-6">
-                    {isAdmin ? 'Admin View - All Photos' : `Welcome, ${guestName}!`}
-                </p>
-            </div>
-            {!isAdmin && (
-                <button
-                    onClick={() => setShowAdminModal(true)}
-                    className="fixed bottom-4 right-4 p-2 text-gray-400 hover:text-wedding-purple transition-colors duration-300 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:shadow-md"
-                    title="Admin Access"
-                >
-                    <Settings className="w-5 h-5"/>
-                </button>
-            )}
-            {isAdmin && (
-                <div
-                    className="fixed bottom-4 right-4 flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm px-2 py-1">
-                    <div className="text-xs text-wedding-green-dark">
-                        Admin
-                    </div>
-                    <button
-                        onClick={() => {
-                            setIsAdmin(false);
-                            setAllPhotos([]);
-                            setPhotos([]);
-                            fetchPhotos(false);
-                        }}
-                        className="p-1 text-gray-400 hover:text-wedding-purple"
-                    >
-                        <X className="w-4 h-4"/>
-                    </button>
-                </div>
-            )}
-        </header>
+    const Toast = ({message, type = 'success', onClose}) => (
+        <Alert
+            variant={type === 'success' ? 'default' : 'destructive'}
+            className={`fixed top-4 right-4 z-50 max-w-md transform transition-transform duration-300 ease-in-out`}
+        >
+            <AlertTitle className="flex items-center gap-2">
+                {type === 'success' ? <CheckCircle className="h-4 w-4"/> : <AlertCircle className="h-4 w-4"/>}
+                {message}
+            </AlertTitle>
+        </Alert>
     );
+    const renderHeader = () => (
+        <motion.header
+            initial={{y: -20, opacity: 0}}
+            animate={{y: 0, opacity: 1}}
+            className="relative mb-12 pt-8"
+        >
+            <div className="text-center relative h-32"> {/* Added fixed height container */}
+                {/* Animated heart background */}
+                <motion.div
+                    animate={{
+                        scale: [1, 1.05, 1],
+                    }}
+                    transition={{
+                        duration: 3,
+                        repeat: Infinity,
+                        repeatType: "reverse",
+                        ease: "easeInOut"
+                    }}
+                    className="absolute left-0 right-0 top-4 mx-auto flex justify-center"
+                >
+                    <Heart className="w-20 h-20 text-wedding-purple-light/30 fill-wedding-purple-light/30" />
+                </motion.div>
+
+                {/* Text overlay */}
+                <h1 className="font-['Great_Vibes'] text-6xl text-wedding-purple-dark relative z-10 pt-2">
+                    R & S
+                    <div className="absolute -left-8 top-1/2 -translate-y-1/2">
+                        <FlowerIcon className="w-6 h-6 text-wedding-green"/>
+                    </div>
+                    <div className="absolute -right-8 top-1/2 -translate-y-1/2">
+                        <FlowerIcon className="w-6 h-6 text-wedding-green"/>
+                    </div>
+                </h1>
+
+                <motion.h2
+                    initial={{opacity: 0, y: 20}}
+                    animate={{opacity: 1, y: 0}}
+                    className="font-['Cormorant_Garamond'] text-3xl text-wedding-purple mb-6"
+                >
+                    Engagement Celebration
+                </motion.h2>
+
+                <div className="flex items-center justify-center gap-4 mb-4">
+                    <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
+                    <motion.div
+                        animate={{
+                            scale: [1, 1.2, 1],
+                        }}
+                        transition={{
+                            duration: 1.5,
+                            repeat: Infinity,
+                            repeatType: "reverse"
+                        }}
+                    >
+                        <Heart className="w-4 h-4 text-wedding-purple-light fill-wedding-purple-light"/>
+                    </motion.div>
+                    <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
+                </div>
+            </div>
+        </motion.header>
+    );
+
+    const fontStyles = `
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600&display=swap');
+    `;
+    const renderLoginScreen = () => (
+        <motion.div
+            initial={{opacity: 0}}
+            animate={{opacity: 1}}
+            className="min-h-screen bg-gradient-to-br from-wedding-accent-light to-wedding-green-light/20 flex items-center justify-center"
+        >
+            <Card
+                className="relative bg-white/95 backdrop-blur-sm p-12 rounded-lg shadow-xl max-w-md w-full border border-wedding-purple-light/30">
+                <motion.div
+                    initial={{y: -20}}
+                    animate={{y: 0}}
+                    className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center"
+                >
+                    {/*<GemIcon className="w-8 h-8 text-wedding-purple-light"/>*/}
+                    <Heart className="w-12 h-12 -mt-2 text-wedding-purple fill-wedding-purple"/>
+                </motion.div>
+
+                <CardContent className="text-center mb-8 mt-4">
+                    <motion.h1
+                        initial={{scale: 0.9}}
+                        animate={{scale: 1}}
+                        className="font-['Great_Vibes'] text-5xl text-wedding-purple-dark mb-2"
+                    >
+                        R & S
+                    </motion.h1>
+                    <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-purple mb-4">
+                        Engagement Celebration
+                    </h2>
+                    <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic">
+                        Share your moments with us
+                    </Badge>
+                </CardContent>
+
+                <form onSubmit={(e) => {
+                    e.preventDefault();
+                    handleLogin(e);
+                    triggerConfetti();
+                }} className="space-y-6">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Enter your name"
+                            value={guestName}
+                            onChange={(e) => setGuestName(e.target.value)}
+                            className="font-['Quicksand'] w-full p-3 pl-10 border-2 border-wedding-green-light focus:border-wedding-purple focus:ring-wedding-purple rounded-full bg-white/70"
+                            required
+                        />
+                        <Camera className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-wedding-purple-light"/>
+                    </div>
+                    <Button
+                        type="submit"
+                        className="font-['Quicksand'] w-full bg-wedding-purple text-white p-3 rounded-full hover:bg-wedding-purple-dark transition duration-300 shadow-lg flex items-center justify-center gap-2 group"
+                    >
+                        <span>Join the Celebration</span>
+                        <Heart className="w-4 h-4 group-hover:fill-white transition-colors"/>
+                    </Button>
+                </form>
+            </Card>
+        </motion.div>
+    );
+    const renderFooter = () => (
+        <motion.footer
+            initial={{y: 20, opacity: 0}}
+            animate={{y: 0, opacity: 1}}
+            className="bg-white/80 backdrop-blur-sm mt-20 py-8 rounded-t-3xl shadow-lg border-t border-wedding-purple-light/30"
+        >
+            <div className="max-w-4xl mx-auto px-6">
+                <div className="text-center space-y-4">
+                    <motion.div
+                        className="flex items-center justify-center gap-3 mb-6"
+                        animate={{
+                            scale: [1, 1.1, 1],
+                        }}
+                        transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            repeatType: "reverse"
+                        }}
+                    >
+                        {/*<GemIcon className="w-5 h-5 text-wedding-purple-light"/>*/}
+                        <Heart className="w-6 h-6 text-wedding-purple-light fill-wedding-purple-light"/>
+                        {/*<GemIcon className="w-5 h-5 text-wedding-purple-light"/>*/}
+                    </motion.div>
+
+                    <motion.h2
+                        whileHover={{scale: 1.05}}
+                        className="font-['Cormorant_Garamond'] text-4xl text-wedding-purple-dark"
+                    >
+                        Rushel & Sivani
+                    </motion.h2>
+
+                    <motion.div
+                        whileHover={{scale: 1.05}}
+                        className="flex items-center justify-center gap-2 text-wedding-purple"
+                    >
+                        <Calendar className="w-5 h-5"/>
+                        <p className="font-['Great_Vibes'] text-2xl">
+                            November 10, 2024
+                        </p>
+                    </motion.div>
+
+                    <div className="flex items-center justify-center gap-4 mt-6">
+                        <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
+                        <motion.div
+                            animate={{
+                                rotate: [0, 10, -10, 0],
+                            }}
+                            transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                repeatType: "reverse"
+                            }}
+                        >
+                            <Heart className="w-4 h-4 text-wedding-purple-light"/>
+                        </motion.div>
+                        <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
+                    </div>
+                </div>
+            </div>
+        </motion.footer>
+    );
+
     // Add this modal render function
     const renderAdminModal = () => (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -727,10 +921,16 @@ function App() {
     );
 
     const renderGeneralUpload = () => (
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <h2 className="text-2xl font-serif mb-4">Upload Photos</h2>
+        <div
+            className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8 border border-wedding-purple-light/30">
+            <div className="text-center mb-6">
+                <Camera className="w-8 h-8 text-wedding-purple mx-auto mb-2"/>
+                <h2 className="text-2xl font-serif text-wedding-purple-dark">Share Your Photos</h2>
+            </div>
+
             <div className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <div
+                    className="border-2 border-dashed border-wedding-purple-light/50 rounded-xl p-8 text-center bg-wedding-accent-light/50">
                     <input
                         type="file"
                         accept="image/*"
@@ -744,17 +944,16 @@ function App() {
                         htmlFor="file-upload"
                         className="cursor-pointer flex flex-col items-center justify-center"
                     >
-                        <Upload className="w-12 h-12 text-gray-400 mb-2"/>
-                        <p className="text-gray-600">
+                        <Upload className="w-12 h-12 text-wedding-purple-light mb-2"/>
+                        <p className="text-wedding-purple-dark">
                             Click to select up to {MAX_PHOTOS} photos
                             <br/>
-                            <span className="text-sm text-gray-400">
-                (Max 10MB per image)
-              </span>
+                            <span className="text-sm text-wedding-purple-light italic">
+                                (Max 10MB per image)
+                            </span>
                         </p>
                     </label>
                 </div>
-
                 {selectedFiles.length > 0 && (
                     <div className="space-y-4">
                         <div className="max-h-60 overflow-y-auto">
@@ -813,7 +1012,7 @@ function App() {
                         >
                             {completedChallenges.has(challenge.id) && (
                                 <div className="absolute top-4 right-4">
-                                    <CheckCircle className="text-wedding-green-dark" size={24} />
+                                    <CheckCircle className="text-wedding-green-dark" size={24}/>
                                 </div>
                             )}
 
@@ -846,7 +1045,7 @@ function App() {
                                     {completedChallenges.has(challenge.id) ? (
                                         <>
                                             <div className="mb-2 text-wedding-green-dark">
-                                                <CheckCircle size={32} />
+                                                <CheckCircle size={32}/>
                                             </div>
                                             <p className="text-wedding-purple-dark font-medium">
                                                 Challenge Completed!
@@ -858,7 +1057,7 @@ function App() {
                                     ) : (
                                         <>
                                             <div className="mb-2 text-wedding-purple">
-                                                <Upload size={32} />
+                                                <Upload size={32}/>
                                             </div>
                                             <p className="text-wedding-purple-dark font-medium">
                                                 Select Photo for this Challenge
@@ -873,7 +1072,8 @@ function App() {
 
                             {selectedChallengeFiles[challenge.id] && (
                                 <div className="mt-4 space-y-4">
-                                    <div className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
+                                    <div
+                                        className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
                                         <div className="flex-1">
                                             <p className="text-sm truncate text-wedding-purple-dark">
                                                 {selectedChallengeFiles[challenge.id].name}
@@ -891,7 +1091,7 @@ function App() {
                                             onClick={() => removeChallengeFile(challenge.id)}
                                             className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
                                         >
-                                            <X className="w-4 h-4" />
+                                            <X className="w-4 h-4"/>
                                         </button>
                                     </div>
 
@@ -924,7 +1124,8 @@ function App() {
                                     {expandedChallenges.has(challenge.id) && (
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
                                             {challengePhotos[challenge.id].map((photo) => (
-                                                <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
+                                                <div key={photo.id}
+                                                     className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
                                                     <img
                                                         src={`${API_URL}/uploads/${photo.filename}`}
                                                         alt={`Photo by ${photo.uploadedBy}`}
@@ -950,7 +1151,8 @@ function App() {
                                     {challengePhotos[challenge.id]
                                         .filter(photo => photo.uploadedBy === guestName) // Filter to show only the current user's photos
                                         .map(photo => (
-                                            <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
+                                            <div key={photo.id}
+                                                 className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
                                                 <img
                                                     src={`${API_URL}/uploads/${photo.filename}`}
                                                     alt={`Photo by ${photo.uploadedBy}`}
@@ -974,10 +1176,6 @@ function App() {
         </div>
     );
     const renderPhotoGallery = () => {
-        const getImageUrl = (filename) => {
-            return `${API_URL}/uploads/${filename}`;
-        };
-
         const photosToDisplay = isAdmin ? allPhotos : photos.filter(photo => {
             let metadata;
             try {
@@ -992,33 +1190,50 @@ function App() {
         });
 
         return (
-            <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-2xl font-serif mb-4">
-                    {isAdmin ? 'All Photos' : 'Your Photos'}
-                </h2>
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-8">
+                <div className="text-center mb-4 sm:mb-6">
+                    <h2 className="text-xl sm:text-2xl font-serif text-wedding-purple-dark">
+                        {isAdmin ? 'All Captured Moments' : 'Your Captured Moments'}
+                    </h2>
+                    <div className="flex items-center justify-center gap-2 mt-2">
+                        <div className="h-px bg-wedding-purple-light/50 flex-1 max-w-[50px]"/>
+                        <Heart className="w-4 h-4 text-wedding-purple-light fill-wedding-purple-light"/>
+                        <div className="h-px bg-wedding-purple-light/50 flex-1 max-w-[50px]"/>
+                    </div>
+                </div>
+
                 {loading ? (
-                    <div className="text-center py-8">
-                        <p className="text-gray-600">Loading photos...</p>
+                    <div className="text-center py-4 sm:py-8">
+                        <p className="text-wedding-purple-light italic">Loading moments...</p>
                     </div>
                 ) : photosToDisplay.length === 0 ? (
-                    <div className="text-center py-8">
-                        <p className="text-gray-600">No photos found</p>
+                    <div className="text-center py-4 sm:py-8">
+                        <Camera className="w-8 h-8 sm:w-12 sm:h-12 text-wedding-purple-light mx-auto mb-2"/>
+                        <p className="text-wedding-purple-light italic">No photos yet</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
                         {photosToDisplay.map((photo) => {
-                            const imageUrl = getImageUrl(photo.filename);
+                            const imageUrl = `${API_URL}/uploads/${photo.filename}`;
 
                             return (
-                                <div key={photo.id} className="bg-gray-100 p-4 rounded">
-                                    <div className="relative">
+                                <motion.div
+                                    key={photo.id}
+                                    className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
+                                    whileHover={{ y: -2 }}
+                                    transition={{ duration: 0.2 }}
+                                >
+                                    <div
+                                        className="relative aspect-square"
+                                        onClick={() => setSelectedImage(imageUrl)}
+                                        role="button"
+                                        tabIndex={0}
+                                    >
                                         <img
                                             src={imageUrl}
                                             alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
-                                            className="w-full h-48 object-cover rounded mb-2 cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => setSelectedImage(imageUrl)}
+                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                             onError={(e) => {
-                                                console.error('Image load error:', imageUrl);
                                                 setImageErrors(prev => ({
                                                     ...prev,
                                                     [photo.id]: true
@@ -1026,131 +1241,112 @@ function App() {
                                             }}
                                             loading="lazy"
                                         />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-medium">
-                                            By: {photo.uploadedBy || 'Unknown Guest'}
-                                        </p>
-                                        <p className="text-sm text-gray-600">
-                                            {photo.uploadType || 'General'}
-                                            {photo.challengeInfo && ` - ${photo.challengeInfo}`}
-                                        </p>
-                                        {isAdmin && photo.deviceInfo && (
-                                            <p className="text-xs text-gray-500">
-                                                Uploaded from: {photo.deviceInfo}
+                                        {/* Gradient overlay */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
+
+                                        {/* Photo info - Always visible on mobile, hover on desktop */}
+                                        <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
+                                            <p className="text-sm sm:text-base font-medium truncate">
+                                                {photo.uploadedBy || 'Unknown Guest'}
                                             </p>
-                                        )}
-                                        <a
-                                            href={imageUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-500 hover:underline text-sm block"
-                                        >
-                                            View full size
-                                        </a>
+                                            <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
+                                                {photo.uploadType || 'General'}
+                                                {photo.challengeInfo && ` - ${photo.challengeInfo}`}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
+                                </motion.div>
                             );
                         })}
                     </div>
+                )}
+
+                {selectedImage && (
+                    <ImageModal
+                        image={selectedImage}
+                        onClose={() => {
+                            setSelectedImage(null);
+                            setActiveChallenge(null);
+                        }}
+                    />
                 )}
             </div>
         );
     };
     if (!isLoggedIn) {
-        return (
-            <div
-                className="min-h-screen bg-wedding-accent-light flex items-center justify-center bg-[url('/paisley-pattern.png')] bg-opacity-5">
-                <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full border-2 border-wedding-purple">
-                    <h1 className="text-3xl font-serif text-center mb-6 text-wedding-purple-dark">
-                        Welcome to Rushel and Sivani's Engagement Celebration
-                    </h1>
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <input
-                            type="text"
-                            placeholder="Enter your name"
-                            value={guestName}
-                            onChange={(e) => setGuestName(e.target.value)}
-                            className="w-full p-2 border-2 border-wedding-green focus:ring-wedding-purple focus:border-wedding-purple rounded"
-                            required
-                        />
-                        <button
-                            type="submit"
-                            className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 shadow-lg"
-                        >
-                            Join the Celebration
-                        </button>
-                    </form>
-                </div>
-            </div>
-        );
+        return renderLoginScreen();
     }
 
     return (
-        <div className="min-h-screen bg-wedding-accent-light p-4">
-            <div className="max-w-4xl mx-auto">
-                {renderHeader()}
-
-                {/* Show tabs and upload sections only when not in admin mode */}
-                {!isAdmin && (
-                    <>
-                        <div className="mb-6 flex space-x-4 justify-center">
-                            <button
-                                onClick={() => setSelectedTab('general')}
-                                className={`px-6 py-2 rounded-full shadow-md transition duration-300 ${
-                                    selectedTab === 'general'
-                                        ? 'bg-wedding-purple text-white'
-                                        : 'bg-wedding-green-light text-wedding-purple hover:bg-wedding-green hover:text-white'
-                                }`}
-                            >
-                                General Upload
-                            </button>
-                            <button
-                                onClick={() => setSelectedTab('challenges')}
-                                className={`px-6 py-2 rounded-full shadow-md transition duration-300 ${
-                                    selectedTab === 'challenges'
-                                        ? 'bg-wedding-purple text-white'
-                                        : 'bg-wedding-green-light text-wedding-purple hover:bg-wedding-green hover:text-white'
-                                }`}
-                            >
-                                Photo Challenges
-                            </button>
-                        </div>
-
-                        {selectedTab === 'general' && (
+        <AnimatePresence>
+            <div className="min-h-screen bg-gradient-to-br from-wedding-accent-light to-wedding-green-light/20">
+                <style>{fontStyles}</style>
+                <div className="p-6">
+                    <div className="max-w-4xl mx-auto">
+                        {renderHeader()}
+                        {!isAdmin && (
                             <>
-                                {renderGeneralUpload()}
-                                {renderPhotoGallery()}
+                                <div className="mb-8 flex justify-center gap-4">
+                                    <button
+                                        onClick={() => setSelectedTab('general')}
+                                        className={`font-['Quicksand'] px-8 py-3 rounded-full shadow-md transition duration-300 flex items-center gap-2 ${
+                                            selectedTab === 'general'
+                                                ? 'bg-wedding-purple text-white'
+                                                : 'bg-white/80 text-wedding-purple hover:bg-wedding-purple hover:text-white'
+                                        }`}
+                                    >
+                                        <Camera className="w-4 h-4"/>
+                                        <span>Upload Photos</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedTab('challenges')}
+                                        className={`font-['Quicksand'] px-8 py-3 rounded-full shadow-md transition duration-300 flex items-center gap-2 ${
+                                            selectedTab === 'challenges'
+                                                ? 'bg-wedding-purple text-white'
+                                                : 'bg-white/80 text-wedding-purple hover:bg-wedding-purple hover:text-white'
+                                        }`}
+                                    >
+                                        <Star className="w-4 h-4"/>
+                                        <span>Photo Challenges</span>
+                                    </button>
+                                </div>
+
+                                {selectedTab === 'general' && (
+                                    <>
+                                        {renderGeneralUpload()}
+                                        {renderPhotoGallery()}
+                                    </>
+                                )}
+                                {selectedTab === 'challenges' && renderChallenges()}
                             </>
                         )}
-                        {selectedTab === 'challenges' && renderChallenges()}
-                    </>
+
+                        {isAdmin && renderPhotoGallery()}
+                    </div>
+                </div>
+
+                {renderFooter()}
+
+                {showAdminModal && renderAdminModal()}
+                {notification && (
+                    <Toast
+                        message={notification.message}
+                        type={notification.type}
+                        onClose={() => setNotification(null)}
+                    />
                 )}
-
-                {/* Show gallery for admin regardless of tab */}
-                {isAdmin && renderPhotoGallery()}
+                {selectedImage && (
+                    <ImageModal
+                        image={selectedImage}
+                        onClose={() => {
+                            setSelectedImage(null);
+                            setActiveChallenge(null);
+                        }}
+                    />
+                )}
             </div>
-
-            {showAdminModal && renderAdminModal()}
-            {notification && (
-                <Toast
-                    message={notification.message}
-                    type={notification.type}
-                    onClose={() => setNotification(null)}
-                />
-            )}
-            {selectedImage && (
-                <ImageModal
-                    image={selectedImage}
-                    onClose={() => {
-                        setSelectedImage(null);
-                        setActiveChallenge(null);
-                    }}
-                />
-            )}
-        </div>
+        </AnimatePresence>
     );
 };
-
 
 export default App;
