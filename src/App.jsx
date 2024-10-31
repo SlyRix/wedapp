@@ -661,6 +661,7 @@ function App() {
             // Save to localStorage
             localStorage.setItem('guestName', guestName.trim());
             setIsLoggedIn(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
             fetchPhotos();
             challenges.forEach(challenge => {
                 fetchChallengePhotos(challenge.id);
@@ -908,20 +909,42 @@ function App() {
                 </div>
 
                 <CardContent className="text-center mb-8 mt-4">
-                    <motion.h1
-                        initial={{scale: 0.9}}
-                        animate={{scale: 1}}
-                        className="font-['Great_Vibes'] text-5xl text-wedding-purple-dark mb-2"
-                    >
-                        R & S
-                    </motion.h1>
-                    <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-purple mb-4">
-                        Engagement Celebration
-                    </h2>
-                    <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic">
-                        Share your moments with us
-                    </Badge>
+                    {/* Heart background with relative positioning */}
+                    <div className="relative h-32">
+                        {/* Animated heart background */}
+                        <motion.div
+                            animate={{
+                                scale: [1, 1.05, 1],
+                            }}
+                            transition={{
+                                duration: 3,
+                                repeat: Infinity,
+                                repeatType: "reverse",
+                                ease: "easeInOut"
+                            }}
+                            className="absolute left-0 right-0 top-4 mx-auto flex justify-center z-0"
+                        >
+                            <Heart className="w-20 h-20 text-wedding-purple-light/30 fill-wedding-purple-light/30"/>
+                        </motion.div>
+
+                        {/* Text overlay */}
+                        <motion.h1
+                            initial={{scale: 0.9}}
+                            animate={{scale: 1}}
+                            className="font-['Great_Vibes'] text-5xl text-wedding-purple-dark relative z-10 pt-2"
+                        >
+                            R & S
+                        </motion.h1>
+
+                        <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-purple mb-4">
+                            Engagement Celebration
+                        </h2>
+                        <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic">
+                            Share your moments with us
+                        </Badge>
+                    </div>
                 </CardContent>
+
 
                 <form onSubmit={(e) => {
                     e.preventDefault();
