@@ -1,6 +1,7 @@
 import React, {useState, useEffect} from 'react';
+import PhotoUploader from './PhotoUploader';
 import {
-    CheckCircle, Upload, X, AlertCircle, Settings,
+    CheckCircle, X, AlertCircle, Settings,
     LogIn, ChevronDown, ChevronLeft, ChevronRight,
     Heart, Camera, Star, Calendar,
     FlowerIcon, LogOut, Shield
@@ -93,8 +94,7 @@ function App() {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [uploadProgress, setUploadProgress] = useState({});
     const [deviceInfo, setDeviceInfo] = useState('');
-    const [selectedChallengeFiles, setSelectedChallengeFiles] = useState({});
-    const [challengeUploadProgress, setChallengeUploadProgress] = useState({});
+
     const [selectedImage, setSelectedImage] = useState(null);
 
 
@@ -137,34 +137,6 @@ function App() {
         return 'Unknown Device';
     };
 
-    const handleFileSelection = (e) => {
-        const files = Array.from(e.target.files);
-
-        if (files.length > MAX_PHOTOS) {
-            setNotification({message: `You can only upload up to ${MAX_PHOTOS} photos at once.`, type: 'error'});
-            return;
-        }
-
-        // Validate file types and sizes
-        const validFiles = files.filter(file => {
-            const isImage = file.type.startsWith('image/');
-            const isUnder10MB = file.size <= 10 * 1024 * 1024; // 10MB limit
-            return isImage && isUnder10MB;
-        });
-
-        if (validFiles.length !== files.length) {
-            setNotification({message: 'Some files were skipped. Only images under 10MB are allowed.', type: 'error'});
-
-        }
-
-        setSelectedFiles(validFiles);
-        // Initialize progress for each file
-        const initialProgress = {};
-        validFiles.forEach(file => {
-            initialProgress[file.name] = 0;
-        });
-        setUploadProgress(initialProgress);
-    };
     const ImageModal = ({image, onClose}) => {
         const [touchStart, setTouchStart] = useState(null);
         const [touchEnd, setTouchEnd] = useState(null);
@@ -301,14 +273,6 @@ function App() {
             </motion.div>
         );
     };
-    const removeFile = (fileName) => {
-        setSelectedFiles(prev => prev.filter(file => file.name !== fileName));
-        setUploadProgress(prev => {
-            const updated = {...prev};
-            delete updated[fileName];
-            return updated;
-        });
-    };
 
     const uploadFiles = async () => {
         if (selectedFiles.length === 0) return;
@@ -417,23 +381,6 @@ function App() {
         } finally {
             setLoading(false);
         }
-    };
-    const handleChallengeUpload = async (e, challengeId) => {
-        if (!e.target.files[0]) return;
-
-        setLoading(true);
-        setActiveChallenge(challengeId);
-        const file = e.target.files[0];
-
-        try {
-            await uploadChallengeFile(file, challengeId);
-        } catch (err) {
-            console.error('Error uploading challenge photo:', err);
-            setNotification({message: 'Error uploading photo. Please try again.', type: 'error'});
-        }
-        setLoading(false);
-        setActiveChallenge(null);
-        setUploadProgress({...uploadProgress, challenge: 0});
     };
 
     const toggleChallenge = (challengeId) => {
@@ -1101,74 +1048,20 @@ function App() {
     );
 
     const renderGeneralUpload = () => (
-        <div
-            className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8 border border-wedding-purple-light/30">
+        <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8 border border-wedding-purple-light/30">
             <div className="text-center mb-6">
-                <Camera className="w-8 h-8 text-wedding-purple mx-auto mb-2"/>
+                <Camera className="w-8 h-8 text-wedding-purple mx-auto mb-2" />
                 <h2 className="text-2xl font-serif text-wedding-purple-dark">Share Your Photos</h2>
             </div>
 
-            <div className="space-y-4">
-                <div
-                    className="border-2 border-dashed border-wedding-purple-light/50 rounded-xl p-8 text-center bg-wedding-accent-light/50">
-                    <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleFileSelection}
-                        className="hidden"
-                        id="file-upload"
-                        disabled={loading}
-                    />
-                    <label
-                        htmlFor="file-upload"
-                        className="cursor-pointer flex flex-col items-center justify-center"
-                    >
-                        <Upload className="w-12 h-12 text-wedding-purple-light mb-2"/>
-                        <p className="text-wedding-purple-dark">
-                            Click to select up to {MAX_PHOTOS} photos
-                            <br/>
-                            <span className="text-sm text-wedding-purple-light italic">
-                                (Max 10MB per image)
-                            </span>
-                        </p>
-                    </label>
-                </div>
-                {selectedFiles.length > 0 && (
-                    <div className="space-y-4">
-                        <div className="max-h-60 overflow-y-auto">
-                            {selectedFiles.map((file) => (
-                                <div key={file.name}
-                                     className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                                    <div className="flex-1">
-                                        <p className="text-sm truncate">{file.name}</p>
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                            <div
-                                                className="bg-pink-500 h-2 rounded-full transition-all duration-300"
-                                                style={{width: `${uploadProgress[file.name] || 0}%`}}
-                                            />
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => removeFile(file.name)}
-                                        className="ml-2 text-gray-500 hover:text-red-500"
-                                    >
-                                        <X className="w-4 h-4"/>
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-
-                        <button
-                            onClick={uploadFiles}
-                            disabled={loading}
-                            className="w-full bg-pink-500 text-white p-2 rounded hover:bg-pink-600 transition disabled:bg-gray-300"
-                        >
-                            {loading ? 'Uploading...' : `Upload ${selectedFiles.length} Photos`}
-                        </button>
-                    </div>
-                )}
-            </div>
+            <PhotoUploader
+                onFileSelect={setSelectedFiles}
+                onUpload={uploadFiles}
+                maxPhotos={MAX_PHOTOS}
+                loading={loading}
+                deviceInfo={deviceInfo}
+                setNotification={setNotification}
+            />
         </div>
     );
 
@@ -1190,7 +1083,7 @@ function App() {
                                     : 'bg-white border-wedding-purple-light'
                             }`}
                         >
-                            {completedChallenges.has(challenge.id) && (
+                            {completedChallenges.has(challenge.id) && !challenge.isPrivate && (
                                 <div className="absolute top-4 right-4">
                                     <CheckCircle className="text-wedding-green-dark" size={24}/>
                                 </div>
@@ -1205,90 +1098,22 @@ function App() {
                                 </p>
                             </div>
 
-                            <div className="border-2 border-dashed border-wedding-green rounded-lg p-4 text-center">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => handleChallengeFileSelect(e, challenge.id)}
-                                    className="hidden"
-                                    id={`challenge-upload-${challenge.id}`}
-                                    disabled={loading}
-                                />
-                                <label
-                                    htmlFor={`challenge-upload-${challenge.id}`}
-                                    className={`cursor-pointer flex flex-col items-center justify-center p-4 rounded-lg transition-colors ${
-                                        completedChallenges.has(challenge.id)
-                                            ? 'bg-wedding-green-light/20 hover:bg-wedding-green-light/40'
-                                            : 'bg-wedding-accent-light hover:bg-wedding-green-light/20'
-                                    }`}
-                                >
-                                    {completedChallenges.has(challenge.id) ? (
-                                        <>
-                                            <div className="mb-2 text-wedding-green-dark">
-                                                <CheckCircle size={32}/>
-                                            </div>
-                                            <p className="text-wedding-purple-dark font-medium">
-                                                Challenge Completed!
-                                            </p>
-                                            <p className="text-sm text-wedding-purple mt-1">
-                                                Click to upload another photo
-                                            </p>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="mb-2 text-wedding-purple">
-                                                <Upload size={32}/>
-                                            </div>
-                                            <p className="text-wedding-purple-dark font-medium">
-                                                Select Photo for this Challenge
-                                            </p>
-                                            <p className="text-sm text-wedding-purple mt-1">
-                                                Click to select an image
-                                            </p>
-                                        </>
-                                    )}
-                                </label>
-                            </div>
+                            <PhotoUploader
+                                challengeMode={true}
+                                challengeId={challenge.id}
+                                onUpload={uploadChallengeFile}
+                                loading={loading && activeChallenge === challenge.id}
+                                deviceInfo={deviceInfo}
+                                setNotification={setNotification}
+                                isCompleted={completedChallenges.has(challenge.id)}
+                                challengeTitle={challenge.title}
+                                isPrivate={challenge.isPrivate}
+                                guestName={guestName}
+                                challengePhotos={challengePhotos[challenge.id] || []}
+                            />
 
-                            {selectedChallengeFiles[challenge.id] && (
-                                <div className="mt-4 space-y-4">
-                                    <div
-                                        className="flex items-center justify-between bg-wedding-green-light/30 p-2 rounded">
-                                        <div className="flex-1">
-                                            <p className="text-sm truncate text-wedding-purple-dark">
-                                                {selectedChallengeFiles[challenge.id].name}
-                                            </p>
-                                            {challengeUploadProgress[challenge.id] > 0 && (
-                                                <div className="w-full bg-wedding-green-light rounded-full h-2">
-                                                    <div
-                                                        className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
-                                                        style={{width: `${challengeUploadProgress[challenge.id]}%`}}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <button
-                                            onClick={() => removeChallengeFile(challenge.id)}
-                                            className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
-                                        >
-                                            <X className="w-4 h-4"/>
-                                        </button>
-                                    </div>
-
-                                    <button
-                                        onClick={() => uploadChallengeFile(selectedChallengeFiles[challenge.id], challenge.id)}
-                                        disabled={loading}
-                                        className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
-                                    >
-                                        {loading && activeChallenge === challenge.id
-                                            ? 'Uploading...'
-                                            : 'Upload Photo'
-                                        }
-                                    </button>
-                                </div>
-                            )}
-
-                            {hasUploadedPhoto && challengePhotos[challenge.id] && challengePhotos[challenge.id].length > 0 ? (
+                            {/* Only show public challenge photos grid for non-private challenges */}
+                            {!challenge.isPrivate && hasUploadedPhoto && challengePhotos[challenge.id] && (
                                 <div className="mt-6">
                                     <button
                                         onClick={() => toggleChallenge(challenge.id)}
@@ -1304,8 +1129,7 @@ function App() {
                                     {expandedChallenges.has(challenge.id) && (
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
                                             {challengePhotos[challenge.id].map((photo) => (
-                                                <div key={photo.id}
-                                                     className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
+                                                <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
                                                     <img
                                                         src={`${API_URL}/uploads/${photo.filename}`}
                                                         alt={`Photo by ${photo.uploadedBy}`}
@@ -1313,7 +1137,8 @@ function App() {
                                                         onClick={() => {
                                                             setActiveChallenge(challenge.id);
                                                             setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
-                                                        }}/>
+                                                        }}
+                                                    />
                                                     <p className="text-sm mt-1 text-wedding-purple">
                                                         By: {photo.uploadedBy}
                                                     </p>
@@ -1322,33 +1147,7 @@ function App() {
                                         </div>
                                     )}
                                 </div>
-                            ) : challenge.isPrivate && !hasUploadedPhoto ? (
-                                <p className="text-sm text-gray-500 mt-4">
-                                    This is a private challenge. Only your own photos will be visible here.
-                                </p>
-                            ) : challenge.isPrivate ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
-                                    {challengePhotos[challenge.id]
-                                        .filter(photo => photo.uploadedBy === guestName) // Filter to show only the current user's photos
-                                        .map(photo => (
-                                            <div key={photo.id}
-                                                 className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
-                                                <img
-                                                    src={`${API_URL}/uploads/${photo.filename}`}
-                                                    alt={`Photo by ${photo.uploadedBy}`}
-                                                    className="w-full h-[200px] object-contain rounded"
-                                                    onClick={() => {
-                                                        setActiveChallenge(challenge.id);
-                                                        setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
-                                                    }}
-                                                />
-                                                <p className="text-sm mt-1 text-wedding-purple">
-                                                    By: {photo.uploadedBy}
-                                                </p>
-                                            </div>
-                                        ))}
-                                </div>
-                            ) : null}
+                            )}
                         </div>
                     );
                 })}
