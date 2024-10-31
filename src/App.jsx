@@ -810,21 +810,29 @@ function App() {
         @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600&display=swap');
     `;
     const renderLoginScreen = () => (
+
         <motion.div
             initial={{opacity: 0}}
             animate={{opacity: 1}}
             className="min-h-screen bg-gradient-to-br from-wedding-accent-light to-wedding-green-light/20 flex items-center justify-center"
         >
             <Card
-                className="relative bg-white/95 backdrop-blur-sm p-12 rounded-lg shadow-xl max-w-md w-full border border-wedding-purple-light/30">
-                <motion.div
-                    initial={{y: -20}}
-                    animate={{y: 0}}
-                    className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center"
-                >
-                    {/*<GemIcon className="w-8 h-8 text-wedding-purple-light"/>*/}
-                    <Heart className="w-12 h-12 -mt-2 text-wedding-purple fill-wedding-purple"/>
-                </motion.div>
+                className="relative bg-white/95 backdrop-blur-sm p-12 rounded-lg shadow-xl max-w-md w-full border border-wedding-purple-light/30"
+            >
+                <div className="absolute left-0 right-0 -top-14 flex justify-center">
+                    <style>{fontStyles}</style>
+                    <motion.div
+                        initial={{y: -10}}
+                        animate={{y: 0}}
+                        transition={{
+                            type: "spring",
+                            stiffness: 300,
+                            damping: 20
+                        }}
+                    >
+                        <Heart className="w-12 h-12 text-wedding-purple fill-wedding-purple"/>
+                    </motion.div>
+                </div>
 
                 <CardContent className="text-center mb-8 mt-4">
                     <motion.h1
@@ -906,7 +914,7 @@ function App() {
                     >
                         <Calendar className="w-5 h-5"/>
                         <p className="font-['Great_Vibes'] text-2xl">
-                            November 10, 2024
+                            10th November, 2024
                         </p>
                     </motion.div>
 
