@@ -903,7 +903,7 @@ function App() {
                             damping: 20
                         }}
                     >
-                        <Heart className="w-12 h-12 text-wedding-purple fill-wedding-purple"/>
+                        {/*<Heart className="w-12 h-12 text-wedding-purple fill-wedding-purple"/>*/}
                     </motion.div>
                 </div>
 
