@@ -2,11 +2,10 @@ import React, {useState, useEffect} from 'react';
 import {
     CheckCircle, Upload, X, AlertCircle, Settings,
     LogIn, ChevronDown, ChevronLeft, ChevronRight,
-    Heart, Camera, GemIcon, Star, Calendar,
-    FlowerIcon, Sparkles, Maximize2, LogOut, Shield
+    Heart, Camera, Star, Calendar,
+    FlowerIcon, LogOut, Shield
 } from 'lucide-react';
 import {motion, AnimatePresence} from 'framer-motion';
-import {Alert, AlertTitle} from "./components/ui/alert";
 import {Button} from "./components/ui/button";
 import {Card, CardContent} from "./components/ui/card";
 import {Badge} from "./components/ui/badge";
@@ -71,7 +70,6 @@ const challenges = [
 ];
 
 function App() {
-    const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [expandedChallenges, setExpandedChallenges] = useState(new Set());
     const [challengePhotos, setChallengePhotos] = useState({});
     const [notification, setNotification] = useState(null);
@@ -97,8 +95,6 @@ function App() {
     const [deviceInfo, setDeviceInfo] = useState('');
     const [selectedChallengeFiles, setSelectedChallengeFiles] = useState({});
     const [challengeUploadProgress, setChallengeUploadProgress] = useState({});
-    const [failedImages, setFailedImages] = useState(new Set()); // Add this state at the top with other states
-    const [imageErrors, setImageErrors] = useState({});
     const [selectedImage, setSelectedImage] = useState(null);
 
 
@@ -939,12 +935,30 @@ function App() {
                         <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-purple mb-4">
                             Engagement Celebration
                         </h2>
+
+                        {/* Decorative line with heart */}
+                        <div className="flex items-center justify-center gap-4 mb-4">
+                            <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
+                            <motion.div
+                                animate={{
+                                    scale: [1, 1.2, 1],
+                                }}
+                                transition={{
+                                    duration: 1.5,
+                                    repeat: Infinity,
+                                    repeatType: "reverse"
+                                }}
+                            >
+                                <Heart className="w-4 h-4 text-wedding-purple-light fill-wedding-purple-light"/>
+                            </motion.div>
+                            <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
+                        </div>
+
                         <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic">
                             Share your moments with us
                         </Badge>
                     </div>
                 </CardContent>
-
 
                 <form onSubmit={(e) => {
                     e.preventDefault();
@@ -1516,6 +1530,6 @@ function App() {
         </AnimatePresence>
 
     );
-};
+}
 
 export default App;
