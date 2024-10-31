@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, X, CheckCircle } from 'lucide-react';
+import { Upload, X, Camera, CheckCircle, Lock } from 'lucide-react';
 
 const PhotoUploader = ({
+                           onFileSelect,
                            onUpload,
                            maxPhotos = 30,
                            loading = false,
@@ -10,13 +11,15 @@ const PhotoUploader = ({
                            challengeMode = false,
                            challengeId = null,
                            isCompleted = false,
+                           isPrivate = false,
+                           guestName = '',
+                           challengePhotos = []
                        }) => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [uploadProgress, setUploadProgress] = useState({});
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
-        // Check if device is mobile based on deviceInfo or userAgent
         const checkMobile = () => {
             return /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
                 deviceInfo.includes('Mobile') ||
@@ -29,7 +32,6 @@ const PhotoUploader = ({
     const handleFileSelection = async (e) => {
         const files = Array.from(e.target.files);
 
-        // For challenge mode, only allow one file
         if (challengeMode && files.length > 1) {
             setNotification({
                 message: 'Please select only one photo for the challenge',
@@ -38,7 +40,6 @@ const PhotoUploader = ({
             return;
         }
 
-        // For general upload, check max photos limit
         if (!challengeMode && files.length > maxPhotos) {
             setNotification({
                 message: `You can only upload up to ${maxPhotos} photos at once.`,
@@ -47,10 +48,9 @@ const PhotoUploader = ({
             return;
         }
 
-        // Validate file types and sizes
         const validFiles = files.filter(file => {
             const isImage = file.type.startsWith('image/');
-            const isUnder10MB = file.size <= 10 * 1024 * 1024; // 10MB limit
+            const isUnder10MB = file.size <= 10 * 1024 * 1024;
             return isImage && isUnder10MB;
         });
 
@@ -61,23 +61,41 @@ const PhotoUploader = ({
             });
         }
 
-        // Initialize progress for each file
+        if (validFiles.length === 0) {
+            return;
+        }
+
         const initialProgress = {};
         validFiles.forEach(file => {
             initialProgress[file.name] = 0;
         });
+
         setUploadProgress(initialProgress);
         setSelectedFiles(validFiles);
 
         // If on mobile, trigger upload immediately
         if (isMobile && validFiles.length > 0) {
-            if (challengeMode) {
-                await onUpload(validFiles[0], challengeId);
-            } else {
-                await onUpload(validFiles);
+            try {
+                if (challengeMode) {
+                    await onUpload(validFiles[0], challengeId);
+                } else {
+                    await onUpload(validFiles);
+                }
+                // Clear states after successful upload
+                setSelectedFiles([]);
+                setUploadProgress({});
+            } catch (error) {
+                console.error('Upload error:', error);
+                setNotification({
+                    message: 'Error uploading photos. Please try again.',
+                    type: 'error'
+                });
             }
-            setSelectedFiles([]);
-            setUploadProgress({});
+        } else {
+            // For desktop, update the parent's selected files
+            if (onFileSelect) {
+                onFileSelect(validFiles);
+            }
         }
     };
 
@@ -88,10 +106,32 @@ const PhotoUploader = ({
             delete updated[fileName];
             return updated;
         });
+        if (onFileSelect) {
+            onFileSelect(selectedFiles.filter(file => file.name !== fileName));
+        }
     };
 
     const renderUploadLabel = () => {
         if (challengeMode) {
+            if (isPrivate) {
+                return (
+                    <>
+                        <div className="mb-2 text-wedding-purple">
+                            <Lock size={32} />
+                        </div>
+                        <p className="text-wedding-purple-dark font-medium">
+                            Private Challenge
+                        </p>
+                        <p className="text-sm text-wedding-purple mt-1">
+                            {isMobile ? 'Tap to add your private photo' : 'Click to add your private photo'}
+                        </p>
+                        <p className="text-xs text-wedding-purple-light mt-1">
+                            Only you can see your submissions
+                        </p>
+                    </>
+                );
+            }
+
             if (isCompleted) {
                 return (
                     <>
@@ -107,6 +147,7 @@ const PhotoUploader = ({
                     </>
                 );
             }
+
             return (
                 <>
                     <div className="mb-2 text-wedding-purple">
@@ -138,6 +179,9 @@ const PhotoUploader = ({
 
     const getUploadContainerClasses = () => {
         if (challengeMode) {
+            if (isPrivate) {
+                return "cursor-pointer flex flex-col items-center justify-center p-4 rounded-lg transition-colors bg-wedding-purple-light/10 hover:bg-wedding-purple-light/20";
+            }
             return `cursor-pointer flex flex-col items-center justify-center p-4 rounded-lg transition-colors ${
                 isCompleted
                     ? 'bg-wedding-green-light/20 hover:bg-wedding-green-light/40'
@@ -150,7 +194,7 @@ const PhotoUploader = ({
     return (
         <div className="space-y-4">
             <div className={challengeMode
-                ? "border-2 border-dashed border-wedding-green rounded-lg p-4 text-center"
+                ? `border-2 border-dashed ${isPrivate ? 'border-wedding-purple' : 'border-wedding-green'} rounded-lg p-4 text-center`
                 : "border-2 border-dashed border-wedding-purple-light/50 rounded-xl p-8 text-center bg-wedding-accent-light/50"
             }>
                 <input

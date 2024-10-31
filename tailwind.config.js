@@ -18,6 +18,7 @@ export default {
             light: '#DCECC9',    // Light sage green
             DEFAULT: '#93C572',  // Vibrant green
             dark: '#2E6B34',     // Deep green
+            textt: '#5ba133',    // Black text
           },
           'accent': {
             light: '#F8F7FD',    // Light background

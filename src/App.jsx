@@ -274,17 +274,15 @@ function App() {
         );
     };
 
-    const uploadFiles = async () => {
-        if (selectedFiles.length === 0) return;
+    const uploadFiles = async (files) => {
+        if (!files || files.length === 0) return;
         setLoading(true);
-        const failedUploads = new Set();
 
         try {
-            // Create a new FormData instance
             const formData = new FormData();
 
             // Add each file to the FormData
-            selectedFiles.forEach((file) => {
+            files.forEach((file) => {
                 formData.append('photos', file);
             });
 
@@ -306,24 +304,16 @@ function App() {
                     if (event.lengthComputable) {
                         const progressPercent = Math.round((event.loaded / event.total) * 100);
                         const newProgress = {};
-                        selectedFiles.forEach(file => {
+                        files.forEach(file => {
                             newProgress[file.name] = progressPercent;
                         });
                         setUploadProgress(newProgress);
                     }
                 };
 
-                // Handle network errors
-                xhr.onerror = () => {
-                    reject(new Error('Network error occurred during upload'));
-                };
+                xhr.onerror = () => reject(new Error('Network error occurred during upload'));
+                xhr.ontimeout = () => reject(new Error('Upload request timed out'));
 
-                // Handle timeout
-                xhr.ontimeout = () => {
-                    reject(new Error('Upload request timed out'));
-                };
-
-                // Handle response
                 xhr.onload = () => {
                     if (xhr.status >= 200 && xhr.status < 300) {
                         resolve(xhr.response);
@@ -333,22 +323,18 @@ function App() {
                 };
             });
 
-            // Set timeout to 30 seconds
             xhr.timeout = 30000;
-
-            // Send the request
             xhr.send(formData);
 
-            // Wait for upload to complete
             await uploadPromise;
 
             // Handle successful upload
             setNotification({
-                message: 'Photos uploaded successfully!',
+                message: `Successfully uploaded ${files.length} ${files.length === 1 ? 'photo' : 'photos'}!`,
                 type: 'success'
             });
 
-            // Clear upload state
+            // Clear states
             setSelectedFiles([]);
             setUploadProgress({});
 
@@ -358,7 +344,6 @@ function App() {
         } catch (error) {
             console.error('Upload error:', error);
 
-            // Handle specific error types
             let errorMessage = 'Error uploading photos. Please try again.';
 
             if (error.message.includes('Network error')) {
@@ -373,10 +358,6 @@ function App() {
                 message: errorMessage,
                 type: 'error'
             });
-
-            // Mark all files as failed
-            selectedFiles.forEach(file => failedUploads.add(file.name));
-            setFailedImages(failedUploads);
 
         } finally {
             setLoading(false);
@@ -879,7 +860,7 @@ function App() {
                             R & S
                         </motion.h1>
 
-                        <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-purple mb-4">
+                        <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-green-textt mb-4">
                             Engagement Celebration
                         </h2>
 
@@ -1055,8 +1036,8 @@ function App() {
             </div>
 
             <PhotoUploader
-                onFileSelect={setSelectedFiles}
-                onUpload={uploadFiles}
+                onFileSelect={setSelectedFiles} // Add this for desktop
+                onUpload={uploadFiles}         // This will be used for both mobile and desktop
                 maxPhotos={MAX_PHOTOS}
                 loading={loading}
                 deviceInfo={deviceInfo}
