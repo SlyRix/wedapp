@@ -863,7 +863,9 @@ function App() {
                         <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-green-textt mb-4">
                             Engagement Celebration
                         </h2>
-
+                        <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic mb-4">
+                            Share your moments with us
+                        </Badge>
                         {/* Decorative line with heart */}
                         <div className="flex items-center justify-center gap-4 mb-4">
                             <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
@@ -882,9 +884,7 @@ function App() {
                             <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
                         </div>
 
-                        <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic">
-                            Share your moments with us
-                        </Badge>
+
                     </div>
                 </CardContent>
 
