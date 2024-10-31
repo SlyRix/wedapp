@@ -562,6 +562,16 @@ function App() {
             });
         }
     }, []);
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => {
+                setNotification(null);
+            }, 3000); // Notification will disappear after 3 seconds
+
+            // Cleanup timer on component unmount or when notification changes
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
 
     const fetchChallengePhotos = async (challengeId) => {
         try {
@@ -700,16 +710,22 @@ function App() {
     };
 
 
-    const Toast = ({message, type = 'success', onClose}) => (
-        <Alert
-            variant={type === 'success' ? 'default' : 'destructive'}
-            className={`fixed top-4 right-4 z-50 max-w-md transform transition-transform duration-300 ease-in-out`}
+    const Toast = ({message, type = 'success'}) => (
+        <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
         >
-            <AlertTitle className="flex items-center gap-2">
-                {type === 'success' ? <CheckCircle className="h-4 w-4"/> : <AlertCircle className="h-4 w-4"/>}
-                {message}
-            </AlertTitle>
-        </Alert>
+            <Alert
+                variant={type === 'success' ? 'default' : 'destructive'}
+                className="fixed top-4 right-4 z-50 max-w-md transform transition-transform duration-300 ease-in-out"
+            >
+                <AlertTitle className="flex items-center gap-2">
+                    {type === 'success' ? <CheckCircle className="h-4 w-4"/> : <AlertCircle className="h-4 w-4"/>}
+                    {message}
+                </AlertTitle>
+            </Alert>
+        </motion.div>
     );
     const renderHeader = () => (
         <motion.header
@@ -717,21 +733,22 @@ function App() {
             animate={{y: 0, opacity: 1}}
             className="relative mb-12 pt-8"
         >
-            {/* Add a container for the logout button in the top-right corner */}
-            <div className="absolute top-0 right-0 p-4">
+            {/* Updated container for better positioning and interaction */}
+            <div className="absolute top-0 right-0 z-50 p-4">
                 <motion.button
                     onClick={handleLogout}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="font-['Quicksand'] px-4 py-2 rounded-full bg-white shadow-md text-wedding-purple hover:bg-wedding-purple hover:text-white transition duration-300 flex items-center gap-2 border border-wedding-purple-light/30"
+                    className="font-['Quicksand'] px-4 py-2 rounded-full bg-white shadow-md text-wedding-purple hover:bg-wedding-purple hover:text-white transition duration-300 flex items-center gap-2 border border-wedding-purple-light/30 cursor-pointer select-none"
                 >
                     <LogOut className="w-4 h-4"/>
                     <span className="hidden sm:inline">Logout</span>
                 </motion.button>
             </div>
 
-            <div className="text-center relative h-32">
-                {/* Animated heart background */}
+            {/* Ensure the content below doesn't overlap with the logout button */}
+            <div className="text-center relative h-32 mt-8">
+                {/* Animated heart background - adjusted z-index */}
                 <motion.div
                     animate={{
                         scale: [1, 1.05, 1],
@@ -742,7 +759,7 @@ function App() {
                         repeatType: "reverse",
                         ease: "easeInOut"
                     }}
-                    className="absolute left-0 right-0 top-4 mx-auto flex justify-center"
+                    className="absolute left-0 right-0 top-4 mx-auto flex justify-center z-0"
                 >
                     <Heart className="w-20 h-20 text-wedding-purple-light/30 fill-wedding-purple-light/30" />
                 </motion.div>
@@ -1391,6 +1408,7 @@ function App() {
                 )}
             </div>
         </AnimatePresence>
+
     );
 };
 
