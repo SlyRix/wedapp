@@ -3,7 +3,7 @@ import {
     CheckCircle, Upload, X, AlertCircle, Settings,
     LogIn, ChevronDown, ChevronLeft, ChevronRight,
     Heart, Camera, GemIcon, Star, Calendar,
-    FlowerIcon, Sparkles, Maximize2,LogOut
+    FlowerIcon, Sparkles, Maximize2, LogOut, Shield
 } from 'lucide-react';
 import {motion, AnimatePresence} from 'framer-motion';
 import {Alert, AlertTitle} from "./components/ui/alert";
@@ -169,7 +169,7 @@ function App() {
         });
         setUploadProgress(initialProgress);
     };
-    const ImageModal = ({ image, onClose }) => {
+    const ImageModal = ({image, onClose}) => {
         const [touchStart, setTouchStart] = useState(null);
         const [touchEnd, setTouchEnd] = useState(null);
         const [isAnimating, setIsAnimating] = useState(false);
@@ -229,9 +229,9 @@ function App() {
 
         return (
             <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                initial={{opacity: 0}}
+                animate={{opacity: 1}}
+                exit={{opacity: 0}}
                 className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
                 onClick={onClose}
             >
@@ -243,9 +243,9 @@ function App() {
                 >
                     <motion.img
                         key={image}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3 }}
+                        initial={{opacity: 0, scale: 0.95}}
+                        animate={{opacity: 1, scale: 1}}
+                        transition={{duration: 0.3}}
                         src={image}
                         alt="Full size"
                         className="max-w-full max-h-[90vh] object-contain select-none"
@@ -284,20 +284,21 @@ function App() {
 
                     {/* Mobile swipe indicator - only show briefly on mobile */}
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
+                        initial={{opacity: 0}}
+                        animate={{opacity: 1}}
+                        exit={{opacity: 0}}
                         className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white text-sm md:hidden"
                     >
                         <div className="flex items-center gap-2 bg-black bg-opacity-50 px-4 py-2 rounded-full">
-                            <ChevronLeft className="w-4 h-4" />
+                            <ChevronLeft className="w-4 h-4"/>
                             <span>Swipe to navigate</span>
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="w-4 h-4"/>
                         </div>
                     </motion.div>
 
                     {/* Image counter */}
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-3 py-1 rounded-full">
+                    <div
+                        className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-3 py-1 rounded-full">
                         {currentIndex + 1} / {photosToUse.length}
                     </div>
                 </div>
@@ -677,6 +678,15 @@ function App() {
             type: 'success'
         });
     };
+    const handleAdminLogout = () => {
+        setIsAdmin(false);
+        // Re-fetch photos for normal user view
+        fetchPhotos(false);
+        setNotification({
+            message: 'Exited admin mode',
+            type: 'success'
+        });
+    };
 
     const handleAdminLogin = async (e) => {
         e.preventDefault();
@@ -710,40 +720,103 @@ function App() {
     };
 
 
-    const Toast = ({message, type = 'success'}) => (
-        <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-        >
-            <Alert
-                variant={type === 'success' ? 'default' : 'destructive'}
-                className="fixed top-4 right-4 z-50 max-w-md transform transition-transform duration-300 ease-in-out"
+    const Toast = ({ message, type = 'success', onClose }) => {
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="fixed top-4 right-4 z-50"
             >
-                <AlertTitle className="flex items-center gap-2">
-                    {type === 'success' ? <CheckCircle className="h-4 w-4"/> : <AlertCircle className="h-4 w-4"/>}
-                    {message}
-                </AlertTitle>
-            </Alert>
-        </motion.div>
-    );
+                <div className={`
+        rounded-lg shadow-lg p-4 pr-12 backdrop-blur-sm
+        ${type === 'success'
+                    ? 'bg-wedding-green-light/90 text-wedding-green-dark border border-wedding-green/20'
+                    : 'bg-red-50/90 text-red-800 border border-red-200/20'
+                }
+        max-w-md w-full relative
+      `}>
+                    <div className="flex items-start gap-3">
+                        {type === 'success' ? (
+                            <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        ) : (
+                            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        )}
+
+                        <div className="flex-1">
+                            <p className="font-['Quicksand'] font-medium text-sm">{message}</p>
+                        </div>
+
+                        <button
+                            onClick={onClose}
+                            className={`
+              absolute right-2 top-2 p-1.5 rounded-full transition-colors
+              ${type === 'success'
+                                ? 'hover:bg-wedding-green/20'
+                                : 'hover:bg-red-200/20'
+                            }
+            `}
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        );
+    };
     const renderHeader = () => (
         <motion.header
             initial={{y: -20, opacity: 0}}
             animate={{y: 0, opacity: 1}}
             className="relative mb-12 pt-8"
         >
-            {/* Updated container for better positioning and interaction */}
-            <div className="absolute top-0 right-0 z-50 p-4">
-                <motion.button
-                    onClick={handleLogout}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="font-['Quicksand'] px-4 py-2 rounded-full bg-white shadow-md text-wedding-purple hover:bg-wedding-purple hover:text-white transition duration-300 flex items-center gap-2 border border-wedding-purple-light/30 cursor-pointer select-none"
-                >
-                    <LogOut className="w-4 h-4"/>
-                    <span className="hidden sm:inline">Logout</span>
-                </motion.button>
+            {/* Container for admin and logout buttons */}
+            <div className="absolute top-0 right-0 z-50 p-4 flex gap-2">
+                {isAdmin ? (
+                    // Admin mode buttons
+                    <>
+                        <motion.button
+                            onClick={handleAdminLogout}
+                            whileHover={{scale: 1.05}}
+                            whileTap={{scale: 0.95}}
+                            className="font-['Quicksand'] px-4 py-2 rounded-full bg-wedding-purple text-white shadow-md hover:bg-wedding-purple-dark transition duration-300 flex items-center gap-2 border border-wedding-purple-light/30 cursor-pointer select-none"
+                        >
+                            <Shield className="w-4 h-4"/>
+                            <span className="hidden sm:inline">Exit Admin</span>
+                        </motion.button>
+                        <motion.button
+                            onClick={handleLogout}
+                            whileHover={{scale: 1.05}}
+                            whileTap={{scale: 0.95}}
+                            className="font-['Quicksand'] px-4 py-2 rounded-full bg-white shadow-md text-wedding-purple hover:bg-wedding-purple hover:text-white transition duration-300 flex items-center gap-2 border border-wedding-purple-light/30 cursor-pointer select-none"
+                        >
+                            <LogOut className="w-4 h-4"/>
+                            <span className="hidden sm:inline">Logout</span>
+                        </motion.button>
+                    </>
+                ) : (
+                    // Regular user buttons
+                    <>
+                        <motion.button
+                            onClick={() => setShowAdminModal(true)}
+                            whileHover={{scale: 1.05}}
+                            whileTap={{scale: 0.95}}
+                            className="font-['Quicksand'] px-4 py-2 rounded-full bg-white shadow-md text-wedding-purple hover:bg-wedding-purple hover:text-white transition duration-300 flex items-center gap-2 border border-wedding-purple-light/30 cursor-pointer select-none"
+                        >
+                            <Settings className="w-4 h-4"/>
+                            <span className="hidden sm:inline">Admin</span>
+                        </motion.button>
+                        <motion.button
+                            onClick={handleLogout}
+                            whileHover={{scale: 1.05}}
+                            whileTap={{scale: 0.95}}
+                            className="font-['Quicksand'] px-4 py-2 rounded-full bg-white shadow-md text-wedding-purple hover:bg-wedding-purple hover:text-white transition duration-300 flex items-center gap-2 border border-wedding-purple-light/30 cursor-pointer select-none"
+                        >
+                            <LogOut className="w-4 h-4"/>
+                            <span className="hidden sm:inline">Logout</span>
+                        </motion.button>
+                    </>
+                )}
             </div>
 
             {/* Ensure the content below doesn't overlap with the logout button */}
@@ -761,7 +834,7 @@ function App() {
                     }}
                     className="absolute left-0 right-0 top-4 mx-auto flex justify-center z-0"
                 >
-                    <Heart className="w-20 h-20 text-wedding-purple-light/30 fill-wedding-purple-light/30" />
+                    <Heart className="w-20 h-20 text-wedding-purple-light/30 fill-wedding-purple-light/30"/>
                 </motion.div>
 
                 {/* Text overlay with adjusted flower positioning */}
@@ -1290,8 +1363,8 @@ function App() {
                                 <motion.div
                                     key={photo.id}
                                     className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
-                                    whileHover={{ y: -2 }}
-                                    transition={{ duration: 0.2 }}
+                                    whileHover={{y: -2}}
+                                    transition={{duration: 0.2}}
                                 >
                                     <div
                                         className="relative aspect-square"
@@ -1312,10 +1385,12 @@ function App() {
                                             loading="lazy"
                                         />
                                         {/* Gradient overlay */}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
+                                        <div
+                                            className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
 
                                         {/* Photo info - Always visible on mobile, hover on desktop */}
-                                        <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
+                                        <div
+                                            className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
                                             <p className="text-sm sm:text-base font-medium truncate">
                                                 {photo.uploadedBy || 'Unknown Guest'}
                                             </p>
