@@ -111,13 +111,13 @@ function App() {
             });
         }
     }, [isLoggedIn]);
-    const triggerConfetti = () => {
-        confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: {y: 0.6}
-        });
-    };
+    // const triggerConfetti = () => {
+    //     confetti({
+    //         particleCount: 100,
+    //         spread: 70,
+    //         origin: {y: 0.6}
+    //     });
+    // };
     const getBrowserInfo = (userAgent) => {
         if (/Chrome/i.test(userAgent)) return 'Chrome';
         if (/Firefox/i.test(userAgent)) return 'Firefox';
