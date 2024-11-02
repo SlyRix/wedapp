@@ -1,5 +1,13 @@
 import React, {useState, useEffect} from 'react';
 import PhotoUploader from './PhotoUploader';
+import EnhancedAdminGallery from './components/EnhancedAdminGallery.jsx';
+import OptimizedImage from './components/OptimizedImage';
+import SocialFeatures from './components/SocialFeatures';
+import AdminDashboard from './components/AdminDashboard';
+import AdminView from './components/AdminView';
+import VotingSystem from './components/VotingSystem';
+import ChallengeLeaderboard from './components/ChallengeLeaderboard';
+
 import {
     CheckCircle, X, AlertCircle, Settings,
     LogIn, ChevronDown, ChevronLeft, ChevronRight,
@@ -71,6 +79,8 @@ const challenges = [
 ];
 
 function App() {
+    const [challengeUploadProgress, setChallengeUploadProgress] = useState({});
+
     const [expandedChallenges, setExpandedChallenges] = useState(new Set());
     const [challengePhotos, setChallengePhotos] = useState({});
     const [notification, setNotification] = useState(null);
@@ -82,6 +92,7 @@ function App() {
         // Initialize login state from localStorage
         return !!localStorage.getItem('guestName');
     });
+    const [selectedChallengeFiles, setSelectedChallengeFiles] = useState({});
     const [selectedTab, setSelectedTab] = useState('general');
     const [photos, setPhotos] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -94,19 +105,27 @@ function App() {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [uploadProgress, setUploadProgress] = useState({});
     const [deviceInfo, setDeviceInfo] = useState('');
-
     const [selectedImage, setSelectedImage] = useState(null);
+    const [comments, setComments] = useState({});
+    const [reactions, setReactions] = useState({});
+    const [adminStats, setAdminStats] = useState({
+        totalUploads: 0,
+        activeUsers: 0,
+        challengeCompletion: {},
+        uploadTrends: []
+    });
 
 
     useEffect(() => {
         if (isLoggedIn) {
             fetchPhotos();
-            // Fetch photos for all challenges
             challenges.forEach(challenge => {
                 fetchChallengePhotos(challenge.id);
             });
         }
     }, [isLoggedIn]);
+
+
     // const triggerConfetti = () => {
     //     confetti({
     //         particleCount: 100,
@@ -122,7 +141,73 @@ function App() {
         if (/MSIE|Trident/i.test(userAgent)) return 'Internet Explorer';
         return 'Unknown Browser';
     };
+    const handleAddComment = async (photoId, comment) => {
+        try {
+            // Here you would typically make an API call to save the comment
+            setComments(prev => ({
+                ...prev,
+                [photoId]: [...(prev[photoId] || []), comment]
+            }));
+            setNotification({
+                message: 'Comment added successfully',
+                type: 'success'
+            });
+        } catch (error) {
+            console.error('Error adding comment:', error);
+            setNotification({
+                message: 'Error adding comment',
+                type: 'error'
+            });
+        }
+    };
 
+    const handleAddReaction = async (photoId, reaction) => {
+        try {
+            // Here you would typically make an API call to save the reaction
+            setReactions(prev => ({
+                ...prev,
+                [photoId]: [...(prev[photoId] || []), { user: guestName, type: reaction }]
+            }));
+        } catch (error) {
+            console.error('Error adding reaction:', error);
+            setNotification({
+                message: 'Error adding reaction',
+                type: 'error'
+            });
+        }
+    };
+
+    const handleExportData = async () => {
+        try {
+            // Implement export functionality
+            const data = {
+                photos: allPhotos,
+                users: [...new Set(allPhotos.map(p => p.uploadedBy))],
+                challenges: challenges
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'wedding-photos-export.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            setNotification({
+                message: 'Data exported successfully',
+                type: 'success'
+            });
+        } catch (error) {
+            console.error('Error exporting data:', error);
+            setNotification({
+                message: 'Error exporting data',
+                type: 'error'
+            });
+        }
+    };
     const getDeviceInfo = (userAgent, platform) => {
         // Check mobile devices first
         if (/iPhone/i.test(userAgent)) return 'iPhone';
@@ -375,57 +460,73 @@ function App() {
             return newSet;
         });
     };
+
     const uploadChallengeFile = async (file, challengeId) => {
-        if (!file) return;
+        if (!file) {
+            console.error('No file provided');
+            setNotification({
+                message: 'Please select a file to upload',
+                type: 'error'
+            });
+            return;
+        }
 
         setLoading(true);
         setActiveChallenge(challengeId);
 
         try {
             const challenge = challenges.find(c => c.id === challengeId);
-            const formData = new FormData();
+            if (!challenge) {
+                throw new Error('Challenge not found');
+            }
 
+            const formData = new FormData();
             formData.append('photo', file);
             formData.append('uploadedBy', guestName);
             formData.append('challengeId', challengeId.toString());
             formData.append('challengeTitle', challenge.title);
             formData.append('deviceInfo', deviceInfo);
 
+            // Create and configure XMLHttpRequest for progress tracking
             const xhr = new XMLHttpRequest();
             xhr.open('POST', `${API_URL}/challenge-upload`, true);
 
+            // Set up upload progress tracking
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const progressPercent = Math.round((event.loaded / event.total) * 100);
+                    setChallengeUploadProgress(prev => ({
+                        ...prev,
+                        [challengeId]: progressPercent
+                    }));
+                }
+            };
+
+            // Create a promise to handle the upload
             const uploadPromise = new Promise((resolve, reject) => {
-                xhr.upload.onprogress = (event) => {
-                    if (event.lengthComputable) {
-                        const progressPercent = Math.round((event.loaded / event.total) * 100);
-                        setChallengeUploadProgress(prev => ({
-                            ...prev,
-                            [challengeId]: progressPercent
-                        }));
-                    }
-                };
-
-                xhr.onerror = () => reject(new Error('Network error occurred during upload'));
-                xhr.ontimeout = () => reject(new Error('Upload request timed out'));
-
                 xhr.onload = () => {
                     if (xhr.status >= 200 && xhr.status < 300) {
-                        resolve(JSON.parse(xhr.response));
+                        try {
+                            const response = JSON.parse(xhr.response);
+                            resolve(response);
+                        } catch (error) {
+                            reject(new Error('Invalid response format'));
+                        }
                     } else {
-                        reject(new Error(`HTTP error! status: ${xhr.status}`));
+                        reject(new Error(`Upload failed with status ${xhr.status}`));
                     }
                 };
+                xhr.onerror = () => reject(new Error('Network error occurred'));
+                xhr.ontimeout = () => reject(new Error('Upload timed out'));
             });
 
-            xhr.timeout = 30000;
+            xhr.timeout = 30000; // 30 second timeout
             xhr.send(formData);
 
             const data = await uploadPromise;
             console.log('Challenge upload successful:', data);
-            await fetchChallengePhotos(challengeId);
-            await fetchPhotos();
 
-            // Reset upload state after successful upload
+            // Reset states
             setSelectedChallengeFiles(prev => {
                 const updated = {...prev};
                 delete updated[challengeId];
@@ -437,6 +538,10 @@ function App() {
                 return updated;
             });
 
+            // Refresh photos
+            await fetchChallengePhotos(challengeId);
+            await fetchPhotos();
+
             setNotification({
                 message: 'Challenge photo uploaded successfully!',
                 type: 'success'
@@ -445,14 +550,21 @@ function App() {
         } catch (error) {
             console.error('Error uploading challenge photo:', error);
             setNotification({
-                message: 'Error uploading photo. Please try again.',
+                message: error.message || 'Error uploading photo. Please try again.',
                 type: 'error'
             });
         } finally {
             setLoading(false);
             setActiveChallenge(null);
+            // Clear progress on completion
+            setChallengeUploadProgress(prev => {
+                const updated = {...prev};
+                delete updated[challengeId];
+                return updated;
+            });
         }
     };
+
     useEffect(() => {
         const userAgent = navigator.userAgent;
         setDeviceInfo(`${getBrowserInfo(userAgent)} on ${getDeviceInfo(userAgent, navigator.platform)} (${/Mobile|Android|iPhone|iPad|iPod/i.test(userAgent) ? 'Mobile' : 'Desktop'})`);
@@ -497,7 +609,37 @@ function App() {
             return () => clearTimeout(timer);
         }
     }, [notification]);
+    useEffect(() => {
+        if (isAdmin) {
+            // Calculate admin stats
+            const stats = {
+                totalUploads: allPhotos.length,
+                activeUsers: new Set(allPhotos.map(p => p.uploadedBy)).size,
+                challengeCompletion: challenges.reduce((acc, challenge) => ({
+                    ...acc,
+                    [challenge.id]: allPhotos.filter(p => p.challengeId === challenge.id).length
+                }), {}),
+                uploadTrends: calculateUploadTrends(allPhotos)
+            };
+            setAdminStats(stats);
+        }
+    }, [isAdmin, allPhotos, challenges]);
+    const calculateUploadTrends = (photos) => {
+        const last7Days = Array.from({ length: 7 }, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            return date.toISOString().split('T')[0];
+        }).reverse();
 
+        return last7Days.map(date => ({
+            date: new Date(date).toLocaleDateString(),
+            uploads: photos.filter(photo => {
+                const photoDate = new Date(photo.uploadDate || photo.createdAt)
+                    .toISOString().split('T')[0];
+                return photoDate === date;
+            }).length
+        }));
+    };
     const fetchChallengePhotos = async (challengeId) => {
         try {
             const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
@@ -860,7 +1002,7 @@ function App() {
                             R & S
                         </motion.h1>
 
-                        <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-green-textt mb-4">
+                        <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-purple mb-4">
                             Engagement Celebration
                         </h2>
                         <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic mb-4">
@@ -1079,6 +1221,16 @@ function App() {
                                 </p>
                             </div>
 
+                            {/* Show Leaderboard if challenge is active */}
+                            {!challenge.isPrivate && (
+                                <div className="mb-6">
+                                    <ChallengeLeaderboard
+                                        challengeId={challenge.id}
+                                        challengeTitle={challenge.title}
+                                    />
+                                </div>
+                            )}
+
                             <PhotoUploader
                                 challengeMode={true}
                                 challengeId={challenge.id}
@@ -1091,9 +1243,10 @@ function App() {
                                 isPrivate={challenge.isPrivate}
                                 guestName={guestName}
                                 challengePhotos={challengePhotos[challenge.id] || []}
+                                uploadProgress={challengeUploadProgress[challenge.id] || 0}  // Add this line
                             />
 
-                            {/* Only show public challenge photos grid for non-private challenges */}
+                            {/* Photos Grid */}
                             {!challenge.isPrivate && hasUploadedPhoto && challengePhotos[challenge.id] && (
                                 <div className="mt-6">
                                     <button
@@ -1110,19 +1263,35 @@ function App() {
                                     {expandedChallenges.has(challenge.id) && (
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
                                             {challengePhotos[challenge.id].map((photo) => (
-                                                <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded aspect-auto">
-                                                    <img
+                                                <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded">
+                                                    <OptimizedImage
                                                         src={`${API_URL}/uploads/${photo.filename}`}
                                                         alt={`Photo by ${photo.uploadedBy}`}
-                                                        className="w-full h-[200px] object-contain rounded"
+                                                        className="w-full h-[200px] object-contain rounded cursor-pointer"
                                                         onClick={() => {
                                                             setActiveChallenge(challenge.id);
                                                             setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
                                                         }}
                                                     />
-                                                    <p className="text-sm mt-1 text-wedding-purple">
-                                                        By: {photo.uploadedBy}
-                                                    </p>
+                                                    <div className="mt-2">
+                                                        <p className="text-sm text-wedding-purple">
+                                                            By: {photo.uploadedBy}
+                                                        </p>
+                                                        <div className="flex justify-between items-center mt-2">
+                                                            <SocialFeatures
+                                                                photoId={photo.id}
+                                                                currentUser={guestName}
+                                                                challengeId={challenge.id}
+                                                            />
+                                                            {!challenge.isPrivate && (
+                                                                <VotingSystem
+                                                                    photoId={photo.id}
+                                                                    challengeId={challenge.id}
+                                                                    currentUser={guestName}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -1153,7 +1322,7 @@ function App() {
             <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-8">
                 <div className="text-center mb-4 sm:mb-6">
                     <h2 className="text-xl sm:text-2xl font-serif text-wedding-purple-dark">
-                        {isAdmin ? 'All Captured Moments' : 'Your Captured Moments'}
+                        {isAdmin ? 'Admin Dashboard' : 'Your Captured Moments'}
                     </h2>
                     <div className="flex items-center justify-center gap-2 mt-2">
                         <div className="h-px bg-wedding-purple-light/50 flex-1 max-w-[50px]"/>
@@ -1171,55 +1340,45 @@ function App() {
                         <Camera className="w-8 h-8 sm:w-12 sm:h-12 text-wedding-purple-light mx-auto mb-2"/>
                         <p className="text-wedding-purple-light italic">No photos yet</p>
                     </div>
+                ) : isAdmin ? (
+                    <AdminView
+                        photos={photosToDisplay}
+                        challenges={challenges}
+                        onExportData={handleExportData}
+                        onRefreshData={() => fetchPhotos(true)}
+                    />
                 ) : (
+                    // Regular user view with enhanced photo cards
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
-                        {photosToDisplay.map((photo) => {
-                            const imageUrl = `${API_URL}/uploads/${photo.filename}`;
+                        {photosToDisplay.map((photo) => (
+                            <motion.div
+                                key={photo.id}
+                                className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
+                                whileHover={{y: -2}}
+                                transition={{duration: 0.2}}
+                            >
+                                <OptimizedImage
+                                    src={`${API_URL}/uploads/${photo.filename}`}
+                                    alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
+                                    className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-105"
+                                    onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
+                                />
 
-                            return (
-                                <motion.div
-                                    key={photo.id}
-                                    className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
-                                    whileHover={{y: -2}}
-                                    transition={{duration: 0.2}}
-                                >
-                                    <div
-                                        className="relative aspect-square"
-                                        onClick={() => setSelectedImage(imageUrl)}
-                                        role="button"
-                                        tabIndex={0}
-                                    >
-                                        <img
-                                            src={imageUrl}
-                                            alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
-                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                            onError={(e) => {
-                                                setImageErrors(prev => ({
-                                                    ...prev,
-                                                    [photo.id]: true
-                                                }));
-                                            }}
-                                            loading="lazy"
-                                        />
-                                        {/* Gradient overlay */}
-                                        <div
-                                            className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
+                                    {/* Gradient overlay */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
 
-                                        {/* Photo info - Always visible on mobile, hover on desktop */}
-                                        <div
-                                            className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
-                                            <p className="text-sm sm:text-base font-medium truncate">
-                                                {photo.uploadedBy || 'Unknown Guest'}
-                                            </p>
-                                            <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
-                                                {photo.uploadType || 'General'}
-                                                {photo.challengeInfo && ` - ${photo.challengeInfo}`}
-                                            </p>
-                                        </div>
+                                    {/* Photo info */}
+                                    <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
+                                        <p className="text-sm sm:text-base font-medium truncate">
+                                            {photo.uploadedBy || 'Unknown Guest'}
+                                        </p>
+                                        <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
+                                            {photo.uploadType || 'General'}
+                                            {photo.challengeInfo && ` - ${photo.challengeInfo}`}
+                                        </p>
                                     </div>
-                                </motion.div>
-                            );
-                        })}
+                            </motion.div>
+                        ))}
                     </div>
                 )}
 

@@ -13,10 +13,10 @@ const PhotoUploader = ({
                            isCompleted = false,
                            isPrivate = false,
                            guestName = '',
-                           challengePhotos = []
+                           challengePhotos = [],
+                           uploadProgress = 0
                        }) => {
     const [selectedFiles, setSelectedFiles] = useState([]);
-    const [uploadProgress, setUploadProgress] = useState({});
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -29,87 +29,124 @@ const PhotoUploader = ({
         setIsMobile(checkMobile());
     }, [deviceInfo]);
 
+    const renderProgressBar = (fileName) => {
+        const progress = challengeMode ? uploadProgress : (uploadProgress[fileName] || 0);
+        return (
+            <div className="w-full bg-wedding-green-light rounded-full h-2">
+                <div
+                    className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                />
+            </div>
+        );
+    };
     const handleFileSelection = async (e) => {
-        const files = Array.from(e.target.files);
+        try {
+            const files = Array.from(e.target.files);
 
-        if (challengeMode && files.length > 1) {
-            setNotification({
-                message: 'Please select only one photo for the challenge',
-                type: 'error'
-            });
-            return;
-        }
+            // Input validation
+            if (!files || files.length === 0) {
+                return;
+            }
 
-        if (!challengeMode && files.length > maxPhotos) {
-            setNotification({
-                message: `You can only upload up to ${maxPhotos} photos at once.`,
-                type: 'error'
-            });
-            return;
-        }
-
-        const validFiles = files.filter(file => {
-            const isImage = file.type.startsWith('image/');
-            const isUnder10MB = file.size <= 10 * 1024 * 1024;
-            return isImage && isUnder10MB;
-        });
-
-        if (validFiles.length !== files.length) {
-            setNotification({
-                message: 'Some files were skipped. Only images under 10MB are allowed.',
-                type: 'error'
-            });
-        }
-
-        if (validFiles.length === 0) {
-            return;
-        }
-
-        const initialProgress = {};
-        validFiles.forEach(file => {
-            initialProgress[file.name] = 0;
-        });
-
-        setUploadProgress(initialProgress);
-        setSelectedFiles(validFiles);
-
-        // If on mobile, trigger upload immediately
-        if (isMobile && validFiles.length > 0) {
-            try {
-                if (challengeMode) {
-                    await onUpload(validFiles[0], challengeId);
-                } else {
-                    await onUpload(validFiles);
-                }
-                // Clear states after successful upload
-                setSelectedFiles([]);
-                setUploadProgress({});
-            } catch (error) {
-                console.error('Upload error:', error);
+            if (challengeMode && files.length > 1) {
                 setNotification({
-                    message: 'Error uploading photos. Please try again.',
+                    message: 'Please select only one photo for the challenge',
+                    type: 'error'
+                });
+                return;
+            }
+
+            if (!challengeMode && files.length > maxPhotos) {
+                setNotification({
+                    message: `You can only upload up to ${maxPhotos} photos at once.`,
+                    type: 'error'
+                });
+                return;
+            }
+
+            const validFiles = files.filter(file => {
+                const isImage = file.type.startsWith('image/');
+                const isUnder10MB = file.size <= 10 * 1024 * 1024;
+                return isImage && isUnder10MB;
+            });
+
+            if (validFiles.length !== files.length) {
+                setNotification({
+                    message: 'Some files were skipped. Only images under 10MB are allowed.',
                     type: 'error'
                 });
             }
-        } else {
-            // For desktop, update the parent's selected files
-            if (onFileSelect) {
-                onFileSelect(validFiles);
+
+            if (validFiles.length === 0) {
+                return;
             }
+
+            setSelectedFiles(validFiles);
+
+            // Handle mobile uploads
+            if (isMobile && validFiles.length > 0) {
+                try {
+                    if (challengeMode && challengeId) {
+                        if (!validFiles[0]) {
+                            throw new Error('No valid file selected');
+                        }
+                        await onUpload(validFiles[0], parseInt(challengeId));
+                    } else {
+                        await onUpload(validFiles);
+                    }
+                    clearUploadStates();
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    setNotification({
+                        message: 'Error uploading photos. Please try again.',
+                        type: 'error'
+                    });
+                }
+            } else {
+                // Desktop: Update parent's selected files
+                if (onFileSelect) {
+                    onFileSelect(validFiles);
+                }
+            }
+        } catch (error) {
+            console.error('File selection error:', error);
+            setNotification({
+                message: 'Error processing selected files. Please try again.',
+                type: 'error'
+            });
         }
     };
 
+    const clearUploadStates = () => {
+        setSelectedFiles([]);
+    };
     const removeFile = (fileName) => {
         setSelectedFiles(prev => prev.filter(file => file.name !== fileName));
-        setUploadProgress(prev => {
-            const updated = { ...prev };
-            delete updated[fileName];
-            return updated;
-        });
         if (onFileSelect) {
             onFileSelect(selectedFiles.filter(file => file.name !== fileName));
         }
     };
+
+    const handleUploadClick = async () => {
+        try {
+            if (challengeMode) {
+                if (!selectedFiles[0] || !challengeId) {
+                    throw new Error('Missing required upload data');
+                }
+                await onUpload(selectedFiles[0], parseInt(challengeId));
+            } else {
+                await onUpload(selectedFiles);
+            }
+        } catch (error) {
+            console.error('Upload click error:', error);
+            setNotification({
+                message: 'Error during upload. Please try again.',
+                type: 'error'
+            });
+        }
+    };
+
 
     const renderUploadLabel = () => {
         if (challengeMode) {
@@ -170,8 +207,8 @@ const PhotoUploader = ({
                     {isMobile ? 'Tap to select photos' : `Click to select up to ${maxPhotos} photos`}
                     <br />
                     <span className="text-sm text-wedding-purple-light italic">
-            (Max 10MB per image)
-          </span>
+                        (Max 10MB per image)
+                    </span>
                 </p>
             </>
         );
@@ -224,13 +261,14 @@ const PhotoUploader = ({
                                     <div className="w-full bg-wedding-green-light rounded-full h-2">
                                         <div
                                             className="bg-wedding-purple h-2 rounded-full transition-all duration-300"
-                                            style={{ width: `${uploadProgress[file.name] || 0}%` }}
+                                            style={{ width: `${challengeMode ? uploadProgress : 0}%` }}
                                         />
                                     </div>
                                 </div>
                                 <button
                                     onClick={() => removeFile(file.name)}
                                     className="ml-2 text-wedding-purple hover:text-wedding-purple-dark"
+                                    disabled={loading}
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
@@ -239,8 +277,8 @@ const PhotoUploader = ({
                     </div>
 
                     <button
-                        onClick={() => challengeMode ? onUpload(selectedFiles[0], challengeId) : onUpload(selectedFiles)}
-                        disabled={loading}
+                        onClick={handleUploadClick}
+                        disabled={loading || selectedFiles.length === 0}
                         className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
                     >
                         {loading ? 'Uploading...' : `Upload ${challengeMode ? 'Photo' : `${selectedFiles.length} Photos`}`}
