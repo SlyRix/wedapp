@@ -1236,6 +1236,25 @@ function App() {
                         photo => photo.uploadedBy === guestName
                     ) && !challenge.isPrivate;
 
+                    const handleVoteUpdate = async () => {
+                        // Refresh the challenge photos immediately
+                        await fetchChallengePhotos(challenge.id);
+
+                        // Also refresh the vote status for this challenge
+                        const voteStatusResponse = await fetch(
+                            `${API_URL}/challenges/${challenge.id}/vote-status?userName=${guestName}`
+                        );
+                        const voteStatusData = await voteStatusResponse.json();
+
+                        // Update the challenge vote status in state
+                        setChallengeVoteStatus(prevStatus => ({
+                            ...prevStatus,
+                            [challenge.id]: {
+                                hasVotedOther: voteStatusData.hasVoted && voteStatusData.userVotedPhotoId !== null,
+                                votedPhotoId: voteStatusData.userVotedPhotoId,
+                            }
+                        }));
+                    };
                     return (
                         <div
                             key={challenge.id}
@@ -1288,6 +1307,7 @@ function App() {
                             />
 
                             {/* Photos Grid */}
+                            {/* Photos Grid */}
                             {!challenge.isPrivate && hasUploadedPhoto && challengePhotos[challenge.id] && (
                                 <div className="mt-6">
                                     <button
@@ -1323,7 +1343,8 @@ function App() {
                                                             currentUser={guestName}
                                                             challengeId={challenge.id}
                                                             uploadedBy={photo.uploadedBy}
-                                                            onVoteChange={() => fetchChallengePhotos(challenge.id)}  // Refresh photos after vote change
+                                                            onVoteChange={handleVoteUpdate}
+                                                            votedPhotoId={challengeVoteStatus[challenge.id]?.votedPhotoId}
                                                         />
                                                     </div>
                                                 </div>
@@ -1338,6 +1359,7 @@ function App() {
             </div>
         </div>
     );
+
     const renderPhotoGallery = () => {
         const photosToDisplay = isAdmin ? allPhotos : photos.filter(photo => {
             let metadata;

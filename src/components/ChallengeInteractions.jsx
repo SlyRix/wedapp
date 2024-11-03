@@ -8,17 +8,21 @@ const ChallengeInteractions = ({
                                    currentUser,
                                    challengeId,
                                    uploadedBy,
-                                   onVoteChange
+                                   onVoteChange,
+                                   votedPhotoId
                                }) => {
+
     const [likes, setLikes] = useState(0);
     const [comments, setComments] = useState([]);
     const [isLiked, setIsLiked] = useState(false);
     const [hasVoted, setHasVoted] = useState(false);
-    const [hasVotedOther, setHasVotedOther] = useState(false);  // Added this state
+    const [hasVotedOther, setHasVotedOther] = useState(false);
     const [voteCount, setVoteCount] = useState(0);
     const [showComments, setShowComments] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [newComment, setNewComment] = useState('');
+    const [error, setError] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const API_URL = 'http://slyrix.com:3001/api';
 
@@ -71,6 +75,33 @@ const ChallengeInteractions = ({
             console.error('Error fetching social data:', error);
         }
     };
+    const checkChallengeVoteStatus = useCallback(async () => {
+        try {
+            const response = await fetch(
+                `${API_URL}/challenges/${challengeId}/vote-status?userName=${currentUser}`
+            );
+            const data = await response.json();
+
+            // Update local state based on vote status
+            setHasVoted(data.userVotedPhotoId === parseInt(photoId));
+            setHasVotedOther(data.userVotedPhotoId && data.userVotedPhotoId !== parseInt(photoId));
+        } catch (error) {
+            console.error('Error checking vote status:', error);
+            setError('Failed to check vote status.');
+        }
+    }, [challengeId, currentUser, photoId]);
+    const getPhotoVoteCount = useCallback(async () => {
+        try {
+            const response = await fetch(
+                `${API_URL}/challenges/${challengeId}/photos/${photoId}/vote-status?userName=${currentUser}`
+            );
+            const data = await response.json();
+            setVoteCount(data.voteCount);
+        } catch (error) {
+            console.error('Error getting vote count:', error);
+        }
+    }, [challengeId, photoId, currentUser]);
+
     const debouncedCheckVoteStatus = useCallback(
         debounce(async () => {
             try {
@@ -93,6 +124,17 @@ const ChallengeInteractions = ({
         debouncedCheckVoteStatus();
         return () => debouncedCheckVoteStatus.cancel();
     }, [debouncedCheckVoteStatus]);
+    useEffect(() => {
+        checkChallengeVoteStatus();
+        getPhotoVoteCount();
+    }, [checkChallengeVoteStatus, getPhotoVoteCount]);
+    useEffect(() => {
+        const hasVotedForThis = votedPhotoId === parseInt(photoId);
+        const hasVotedForOther = votedPhotoId && votedPhotoId !== parseInt(photoId);
+
+        setHasVoted(hasVotedForThis);
+        setHasVotedOther(hasVotedForOther);
+    }, [votedPhotoId, photoId]);
 
     const checkVoteStatus = async () => {
         try {
@@ -101,17 +143,14 @@ const ChallengeInteractions = ({
             );
             const data = await response.json();
 
-            // If userVotedPhotoId exists, user has voted in this challenge
-            setHasVoted(data.userVotedPhotoId === parseInt(photoId)); // This is the current photo's vote
-            setHasVotedOther(data.userVotedPhotoId && data.userVotedPhotoId !== parseInt(photoId)); // Voted for different photo
+            setHasVoted(data.userVotedPhotoId === parseInt(photoId));
+            setHasVotedOther(data.userVotedPhotoId && data.userVotedPhotoId !== parseInt(photoId));
             setVoteCount(data.voteCount);
         } catch (error) {
             console.error('Error checking vote status:', error);
             setError('Failed to check vote status.');
         }
     };
-    const [error, setError] = useState(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const canVote = currentUser !== uploadedBy;
 
     const handleVote = async () => {
@@ -120,38 +159,19 @@ const ChallengeInteractions = ({
         try {
             setIsSubmitting(true);
 
-            if (hasVoted) {
-                // Remove existing vote if user clicks again
-                const response = await fetch(`${API_URL}/challenges/${challengeId}/photos/${photoId}/remove-vote`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userName: currentUser })
-                });
+            const response = await fetch(`${API_URL}/challenges/${challengeId}/photos/${photoId}/vote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userName: currentUser })
+            });
 
-                if (!response.ok) throw new Error('Failed to remove vote');
+            if (!response.ok) throw new Error('Vote action failed');
 
-                setHasVoted(false);
-                setVoteCount((prevCount) => prevCount - 1);
-                setHasVotedOther(false);
-            } else {
-                // Add a new vote
-                const response = await fetch(`${API_URL}/challenges/${challengeId}/photos/${photoId}/vote`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userName: currentUser })
-                });
-
-                if (!response.ok) throw new Error('Vote failed');
-
-                const data = await response.json();
-                setHasVoted(true);
-                setVoteCount(data.voteCount);
-                setHasVotedOther(true);  // Prevent voting for other photos in this challenge
-            }
-
+            // Call onVoteChange to update all photos in the challenge
             if (onVoteChange) {
-                onVoteChange();
+                await onVoteChange();
             }
+
         } catch (error) {
             console.error('Error handling vote:', error);
             setError('Failed to submit vote. Please try again.');
@@ -159,7 +179,6 @@ const ChallengeInteractions = ({
             setIsSubmitting(false);
         }
     };
-
     const handleLike = async () => {
         try {
             const response = await fetch(`${API_URL}/photos/${photoId}/likes`, {
