@@ -7,6 +7,8 @@ import AdminDashboard from './components/AdminDashboard';
 import AdminView from './components/AdminView';
 import VotingSystem from './components/VotingSystem';
 import ChallengeLeaderboard from './components/ChallengeLeaderboard';
+import ChallengeInteractions from './components/ChallengeInteractions';
+
 
 import {
     CheckCircle, X, AlertCircle, Settings,
@@ -108,6 +110,8 @@ function App() {
     const [selectedImage, setSelectedImage] = useState(null);
     const [comments, setComments] = useState({});
     const [reactions, setReactions] = useState({});
+    const [challengeVoteStatus, setChallengeVoteStatus] = useState({});
+
     const [adminStats, setAdminStats] = useState({
         totalUploads: 0,
         activeUsers: 0,
@@ -564,6 +568,24 @@ function App() {
             });
         }
     };
+    useEffect(() => {
+        const loadChallenges = async () => {
+            for (const challenge of challenges) {  // Loop over each challenge to fetch its status
+                const status = await fetchVoteStatus(challenge.id, guestName);
+
+                // Update state with voting status for each challenge
+                setChallengeVoteStatus((prevStatus) => ({
+                    ...prevStatus,
+                    [challenge.id]: {
+                        hasVotedOther: status.hasVoted && status.userVotedPhotoId !== null,
+                        votedPhotoId: status.userVotedPhotoId,
+                    }
+                }));
+            }
+        };
+
+        loadChallenges();
+    }, [challenges, guestName]);
 
     useEffect(() => {
         const userAgent = navigator.userAgent;
@@ -1118,7 +1140,24 @@ function App() {
             </div>
         </motion.footer>
     );
+    const fetchVoteStatus = async (challengeId, guestName) => {
+        try {
+            // Adjust the URL to match the existing endpoint
+            const response = await fetch(`${API_URL}/challenges/${challengeId}/vote-status?userName=${guestName}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
+            const data = await response.json();
+            return {
+                hasVoted: data.hasVoted,
+                userVotedPhotoId: data.userVotedPhotoId,
+            };
+        } catch (error) {
+            console.error('Error fetching vote status:', error);
+            return { hasVoted: false, userVotedPhotoId: null };
+        }
+    };
     // Add this modal render function
     const renderAdminModal = () => (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1227,6 +1266,8 @@ function App() {
                                     <ChallengeLeaderboard
                                         challengeId={challenge.id}
                                         challengeTitle={challenge.title}
+                                        challengePhotos={challengePhotos[challenge.id] || []}
+                                        guestName={guestName}
                                     />
                                 </div>
                             )}
@@ -1277,20 +1318,13 @@ function App() {
                                                         <p className="text-sm text-wedding-purple">
                                                             By: {photo.uploadedBy}
                                                         </p>
-                                                        <div className="flex justify-between items-center mt-2">
-                                                            <SocialFeatures
-                                                                photoId={photo.id}
-                                                                currentUser={guestName}
-                                                                challengeId={challenge.id}
-                                                            />
-                                                            {!challenge.isPrivate && (
-                                                                <VotingSystem
-                                                                    photoId={photo.id}
-                                                                    challengeId={challenge.id}
-                                                                    currentUser={guestName}
-                                                                />
-                                                            )}
-                                                        </div>
+                                                        <ChallengeInteractions
+                                                            photoId={photo.id}
+                                                            currentUser={guestName}
+                                                            challengeId={challenge.id}
+                                                            uploadedBy={photo.uploadedBy}
+                                                            onVoteChange={() => fetchChallengePhotos(challenge.id)}  // Refresh photos after vote change
+                                                        />
                                                     </div>
                                                 </div>
                                             ))}
