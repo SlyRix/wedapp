@@ -57,12 +57,29 @@ const ChallengeInteractions = ({
     }, [photoId, currentUser]);
 
     useEffect(() => {
+        fetchSocialData();
+        fetchVoteCount();
+    }, [photoId, currentUser]);
+
+    useEffect(() => {
         const hasVotedForThis = votedPhotoId === parseInt(photoId);
         const hasVotedForOther = votedPhotoId && votedPhotoId !== parseInt(photoId);
-
         setHasVoted(hasVotedForThis);
         setHasVotedOther(hasVotedForOther);
+        fetchVoteCount();
     }, [votedPhotoId, photoId]);
+
+    const fetchVoteCount = async () => {
+        try {
+            const response = await fetch(
+                `${API_URL}/challenges/${challengeId}/photos/${photoId}/vote-status?userName=${currentUser}`
+            );
+            const data = await response.json();
+            setVoteCount(data.voteCount);
+        } catch (error) {
+            console.error('Error fetching vote count:', error);
+        }
+    };
 
     const fetchSocialData = async () => {
         try {
@@ -89,14 +106,30 @@ const ChallengeInteractions = ({
 
         try {
             setIsSubmitting(true);
-            const response = await fetch(`${API_URL}/challenges/${challengeId}/photos/${photoId}/vote`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userName: currentUser })
-            });
+            const response = await fetch(
+                `${API_URL}/challenges/${challengeId}/photos/${photoId}/vote`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userName: currentUser })
+                }
+            );
 
             if (!response.ok) throw new Error('Vote action failed');
-            if (onVoteChange) await onVoteChange();
+
+            const data = await response.json();
+
+            // Update local state immediately
+            setHasVoted(data.voted);
+            setVoteCount(data.voteCount);
+
+            // Notify parent component
+            if (onVoteChange) {
+                await onVoteChange();
+            }
+
+            // Refresh vote count to ensure accuracy
+            await fetchVoteCount();
 
         } catch (error) {
             console.error('Error handling vote:', error);
@@ -150,6 +183,7 @@ const ChallengeInteractions = ({
 
     return (
         <div className="space-y-1">
+            {/* Error Display */}
             {error && (
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
@@ -217,7 +251,6 @@ const ChallengeInteractions = ({
                     </div>
                 )}
             </div>
-
             {/* Mobile Comments Modal */}
             <AnimatePresence>
                 {showComments && (
