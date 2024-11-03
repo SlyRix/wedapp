@@ -1123,6 +1123,14 @@ function App() {
         >
             <div className="max-w-4xl mx-auto px-6">
                 <div className="text-center space-y-4">
+
+
+                    <motion.h2
+                        whileHover={{scale: 1.05}}
+                        className="font-['Cormorant_Garamond'] text-4xl text-wedding-purple-dark"
+                    >
+                        Rushel & Sivani
+                    </motion.h2>
                     <motion.div
                         className="flex items-center justify-center gap-3 mb-6"
                         animate={{
@@ -1138,14 +1146,6 @@ function App() {
                         <Heart className="w-6 h-6 text-wedding-purple-light fill-wedding-purple-light"/>
                         {/*<GemIcon className="w-5 h-5 text-wedding-purple-light"/>*/}
                     </motion.div>
-
-                    <motion.h2
-                        whileHover={{scale: 1.05}}
-                        className="font-['Cormorant_Garamond'] text-4xl text-wedding-purple-dark"
-                    >
-                        Rushel & Sivani
-                    </motion.h2>
-
                     <motion.div
                         whileHover={{scale: 1.05}}
                         className="flex items-center justify-center gap-2 text-wedding-purple"
@@ -1191,7 +1191,7 @@ function App() {
             };
         } catch (error) {
             console.error('Error fetching vote status:', error);
-            return { hasVoted: false, userVotedPhotoId: null };
+            return {hasVoted: false, userVotedPhotoId: null };
         }
     };
     // Add this modal render function
