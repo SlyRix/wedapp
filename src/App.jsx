@@ -1079,6 +1079,41 @@ function App() {
             </Card>
         </motion.div>
     );
+    const EnhancedPhotoGallery = ({ photos, onImageClick, API_URL }) => {
+        return (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
+                {photos.map((photo) => (
+                    <motion.div
+                        key={photo.id}
+                        className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
+                        whileHover={{ y: -2 }}
+                        transition={{ duration: 0.2 }}
+                        onClick={() => onImageClick(`${API_URL}/uploads/${photo.filename}`)}
+                    >
+                        <img
+                            src={`${API_URL}/uploads/${photo.filename}`}
+                            alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
+                            className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+
+                        {/* Gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                        {/* Photo info */}
+                        <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
+                            <p className="text-sm sm:text-base font-medium truncate">
+                                {photo.uploadedBy || 'Unknown Guest'}
+                            </p>
+                            <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
+                                {photo.uploadType || 'General'}
+                                {photo.challengeInfo && ` - ${photo.challengeInfo}`}
+                            </p>
+                        </div>
+                    </motion.div>
+                ))}
+            </div>
+        );
+    };
     const renderFooter = () => (
         <motion.footer
             initial={{y: 20, opacity: 0}}
@@ -1404,7 +1439,6 @@ function App() {
                         onRefreshData={() => fetchPhotos(true)}
                     />
                 ) : (
-                    // Regular user view with enhanced photo cards
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
                         {photosToDisplay.map((photo) => (
                             <motion.div
@@ -1412,27 +1446,29 @@ function App() {
                                 className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
                                 whileHover={{y: -2}}
                                 transition={{duration: 0.2}}
+                                onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
                             >
-                                <OptimizedImage
+                                <img
                                     src={`${API_URL}/uploads/${photo.filename}`}
                                     alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
                                     className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-105"
-                                    onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
                                 />
 
-                                    {/* Gradient overlay */}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
+                                {/* Gradient overlay */}
+                                <div
+                                    className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
 
-                                    {/* Photo info */}
-                                    <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
-                                        <p className="text-sm sm:text-base font-medium truncate">
-                                            {photo.uploadedBy || 'Unknown Guest'}
-                                        </p>
-                                        <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
-                                            {photo.uploadType || 'General'}
-                                            {photo.challengeInfo && ` - ${photo.challengeInfo}`}
-                                        </p>
-                                    </div>
+                                {/* Photo info */}
+                                <div
+                                    className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
+                                    <p className="text-sm sm:text-base font-medium truncate">
+                                        {photo.uploadedBy || 'Unknown Guest'}
+                                    </p>
+                                    <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
+                                        {photo.uploadType || 'General'}
+                                        {photo.challengeInfo && ` - ${photo.challengeInfo}`}
+                                    </p>
+                                </div>
                             </motion.div>
                         ))}
                     </div>
