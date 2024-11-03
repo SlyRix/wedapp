@@ -39,7 +39,7 @@ if (isDev) {
 const challenges = [
     {
         id: 1,
-        title: 'Catch the Groom',
+        title: 'Catch the Couple',
         description: 'Take a fun picture with Rushel and Sivani',
         isPrivate: false
 
@@ -1027,9 +1027,7 @@ function App() {
                         <h2 className="font-['Cormorant_Garamond'] text-2xl text-wedding-purple mb-4">
                             Engagement Celebration
                         </h2>
-                        <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic mb-4">
-                            Share your moments with us
-                        </Badge>
+
                         {/* Decorative line with heart */}
                         <div className="flex items-center justify-center gap-4 mb-4">
                             <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
@@ -1047,6 +1045,9 @@ function App() {
                             </motion.div>
                             <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
                         </div>
+                        <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic mb-4">
+                            Share your moments with us
+                        </Badge>
 
 
                     </div>
@@ -1151,7 +1152,7 @@ function App() {
                     >
                         <Calendar className="w-5 h-5"/>
                         <p className="font-['Great_Vibes'] text-2xl">
-                            10th November, 2024
+                            10th November 2024
                         </p>
                     </motion.div>
 
