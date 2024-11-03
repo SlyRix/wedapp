@@ -18,7 +18,7 @@ const SocialFeatures = ({
     const [isLoading, setIsLoading] = useState(false);
     const [newComment, setNewComment] = useState('');
 
-    const API_URL = 'http://slyrix.com:3001/api';
+    const API_URL = 'https://engagement-photos-api.slyrix.com/api';
 
     useEffect(() => {
         fetchSocialData();

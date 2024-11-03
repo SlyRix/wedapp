@@ -22,7 +22,7 @@ import {Card, CardContent} from "./components/ui/card";
 import {Badge} from "./components/ui/badge";
 import confetti from 'canvas-confetti';
 
-const API_URL = 'http://slyrix.com:3001/api';
+const API_URL = 'https://engagement-photos-api.slyrix.com/api';
 
 const ADMIN_PASSWORD = 'happy';
 const MAX_PHOTOS = 30;

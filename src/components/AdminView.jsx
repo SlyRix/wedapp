@@ -10,7 +10,7 @@ const AdminView = ({
                        onRefreshData
                    }) => {
     const [activeTab, setActiveTab] = useState('gallery');
-    const API_URL = 'http://slyrix.com:3001/api';
+    const API_URL = 'https://engagement-photos-api.slyrix.com/api';
     const users = useMemo(() => {
         return [...new Set(photos.map(photo => photo.uploadedBy))];
     }, [photos]);

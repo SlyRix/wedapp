@@ -22,7 +22,7 @@ const ChallengeInteractions = ({
     const [error, setError] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const API_URL = 'http://slyrix.com:3001/api';
+    const API_URL = 'https://engagement-photos-api.slyrix.com/api';
 
     useEffect(() => {
         let isSubscribed = true;

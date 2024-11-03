@@ -10,7 +10,7 @@ const EnhancedAdminGallery = ({ photos }) => {
         type: 'all',
         isOpen: false
     });
-    const API_URL = 'http://slyrix.com:3001/api';
+    const API_URL = 'https://engagement-photos-api.slyrix.com/api';
 
 
     const [sortBy, setSortBy] = useState('newest');
