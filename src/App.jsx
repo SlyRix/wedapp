@@ -8,7 +8,7 @@ import AdminView from './components/AdminView';
 import VotingSystem from './components/VotingSystem';
 import ChallengeLeaderboard from './components/ChallengeLeaderboard';
 import ChallengeInteractions from './components/ChallengeInteractions';
-import { EllipsisVertical } from 'lucide-react'; // Or the appropriate icon
+import { EllipsisVertical, Trash } from 'lucide-react'; // Or the appropriate icon
 // import DeleteConfirmModal from './components/DeleteConfirmModal'; // Adjust the import path if needed
 
 import { createPortal } from 'react-dom';
@@ -1579,7 +1579,7 @@ function App() {
                                 {/* Three-dot menu icon */}
                                 <div className="absolute top-2 right-2 z-10">
                                     <button onClick={(e) => handleDeleteClick(e, photo)}>
-                                        <EllipsisVertical className="w-6 h-6 text-white"/>
+                                        <Trash className="w-4 h-4 text-white " />
                                     </button>
                                 </div>
 
