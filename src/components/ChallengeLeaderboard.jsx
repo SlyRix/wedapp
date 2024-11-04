@@ -62,7 +62,7 @@ const ChallengeLeaderboard = ({
                 };
             case 2: // Third position
                 return {
-                    icon: <Trophy className="w-5 h-5 text-orange-500" />,
+                    icon: <Trophy className="w-5 h-5" style={{ color: '#bf8970' }}/>,
                     bgColor: 'bg-orange-50',
                     borderColor: 'border-orange-200',
                     textColor: 'text-orange-700',
