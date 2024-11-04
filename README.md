@@ -1,198 +1,184 @@
-# Wedding Photo Gallery App
+# Wedding Photo Sharing App
 
-A React-based web application that allows wedding guests to upload photos and participate in photo challenges. The app uses Google Drive for storage and features both general photo uploads and specific photo challenges.
+A real-time photo sharing application designed for weddings and engagement celebrations, allowing guests to upload photos, participate in photo challenges, and interact through likes, comments, and voting.
 
-## Features
+## 🌟 Features
 
-- Multiple photo upload (up to 30 photos at once)
-- Photo challenges with progress tracking
-- Device and browser detection
-- Admin view for all photos
-- Progress bars for uploads
-- Mobile-friendly design
-- Local storage for challenge completion status
-- Google Drive integration for photo storage
+- **Photo Upload System**
+   - Direct photo uploads with progress tracking
+   - Support for multiple file selection
+   - File size and type validation
+   - Mobile-optimized upload experience
+   - Automatic device detection
 
-## Prerequisites
+- **Challenge System**
+   - Pre-defined photo challenges for guests
+   - Private and public challenge options
+   - Real-time challenge leaderboards
+   - Voting system with one vote per challenge
+   - Challenge completion tracking
 
-Before you begin, ensure you have installed:
-- [Node.js](https://nodejs.org/) (version 14 or higher)
-- npm (comes with Node.js)
+- **Social Features**
+   - Like and comment on photos
+   - Photo voting in challenges
+   - Interactive leaderboards
+   - Real-time updates
+   - User engagement metrics
 
-You'll also need:
-- A Google Cloud Console account
-- Google Drive API enabled
-- OAuth 2.0 Client ID and API Key
+- **Admin Dashboard**
+   - Comprehensive photo management
+   - User activity tracking
+   - Challenge monitoring
+   - Export functionality
+   - Analytics and statistics
 
-## Setup
+- **User Experience**
+   - Responsive design for all devices
+   - Intuitive navigation
+   - Real-time progress indicators
+   - Toast notifications
+   - Image optimization
 
-1. Clone the repository:
+## 🛠️ Technical Stack
+
+### Frontend
+- React
+- Tailwind CSS
+- Lucide Icons
+- Framer Motion
+- Recharts
+- ShadcnUI Components
+
+### Backend
+- Node.js
+- Express
+- SQLite
+- Multer
+- CORS
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js (v14 or higher)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository
 ```bash
-git clone <your-repository-url>
-cd wedding-photo-app
+git clone https://github.com/yourusername/wedding-photo-app.git
 ```
 
-2. Install dependencies:
+2. Install frontend dependencies
 ```bash
+cd wedding-photo-app
 npm install
 ```
 
-3. Create your Google Cloud Console project:
-    - Go to [Google Cloud Console](https://console.cloud.google.com)
-    - Create a new project
-    - Enable the Google Drive API
-    - Create OAuth 2.0 credentials
-    - Add authorized JavaScript origins:
-      ```
-      http://localhost:5173
-      http://localhost
-      ```
-
-4. Update the constants in `App.jsx`:
-```javascript
-const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID';
-const API_KEY = 'YOUR_API_KEY';
-const ADMIN_PASSWORD = 'your-chosen-password';
+3. Install backend dependencies
+```bash
+cd server
+npm install
 ```
 
-5. Run the development server:
+4. Create environment variables
 ```bash
+cp .env.example .env
+```
+
+5. Start the development server
+```bash
+# Start backend server
+cd server
+npm run dev
+
+# Start frontend in a new terminal
+cd ../
 npm run dev
 ```
 
-The app should now be running at `http://localhost:5173`
-
-## Development
-
-To start the development server:
-```bash
-npm run dev
-```
-
-To build for production:
-```bash
-npm run build
-```
-
-To preview the production build:
-```bash
-npm run preview
-```
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 wedding-photo-app/
 ├── src/
-│   ├── App.jsx         # Main application component
-│   ├── main.jsx        # Entry point
-│   └── index.css       # Global styles
-├── public/             # Static assets
-├── index.html          # HTML template
-├── vite.config.js      # Vite configuration
-├── package.json        # Project dependencies
-└── README.md          # This file
+│   ├── components/
+│   │   ├── AdminDashboard.jsx
+│   │   ├── AdminView.jsx
+│   │   ├── ChallengeInteractions.jsx
+│   │   ├── ChallengeLeaderboard.jsx
+│   │   ├── EnhancedAdminGallery.jsx
+│   │   ├── OptimizedImage.jsx
+│   │   ├── PhotoUploader.jsx
+│   │   ├── SocialFeatures.jsx
+│   │   └── VotingSystem.jsx
+│   ├── App.jsx
+│   └── main.jsx
+├── server/
+│   └── server.js
+└── public/
 ```
 
-## Configuration Files
+## 🔑 Key Features Explained
 
-### vite.config.js
-```javascript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+### Photo Upload System
+- Supports both single and multiple photo uploads
+- Handles file validation and size restrictions
+- Progress tracking for uploads
+- Device-specific optimizations
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    strictPort: true,
-    hmr: {
-      host: '0.0.0.0',
-      port: 5173
-    },
-    watch: {
-      usePolling: true
-    }
-  }
-})
-```
+### Challenge System
+- Configurable photo challenges
+- Private challenges for sensitive content
+- Public challenges with voting and leaderboards
+- Real-time challenge status updates
 
-## Dependencies
+### Admin Features
+- Complete photo management
+- User activity monitoring
+- Challenge administration
+- Data export capabilities
+- Analytics dashboard
 
-- React
-- Vite
-- Tailwind CSS
-- Google Drive API
-- lucide-react (for icons)
+## 🔒 Security Features
 
-## Features in Detail
-
-### Photo Upload
-- Multiple file selection
-- Progress tracking
 - File type validation
-- Size limits (10MB per file)
-- Automatic Google Drive folder creation
+- Size restrictions
+- CORS configuration
+- Rate limiting
+- Admin authentication
+- Private challenge protection
 
-### Photo Challenges
-- Predefined photo challenges
-- Progress tracking
-- Completion status saved locally
-- Visual feedback for completed challenges
+## 📱 Mobile Support
 
-### Admin View
-- Password protected
-- Access to all uploaded photos
-- Device information display
-- Upload metadata
+The application is fully responsive and optimized for mobile devices with:
+- Touch-friendly interfaces
+- Optimized upload experience
+- Mobile-first design
+- Device-specific features
+- Progressive loading
 
-## Usage
-
-1. Enter your name to login
-2. Choose between general upload or photo challenges
-3. For general upload:
-    - Select up to 30 photos
-    - View upload progress
-    - Remove selected files if needed
-4. For challenges:
-    - Select a challenge
-    - Upload a photo
-    - Track completion status
-5. Admin access:
-    - Click "Admin Access"
-    - Enter password
-    - View all uploaded photos
-
-## Troubleshooting
-
-If you encounter issues:
-1. Check browser console for errors
-2. Verify Google Cloud Console credentials
-3. Ensure all required APIs are enabled
-4. Clear browser cache and cookies
-5. Check file sizes and types
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
-## Acknowledgments
+## 👥 Authors
 
-- Thanks to the React team
-- Google Drive API documentation
-- Tailwind CSS team
-- Vite team
+- SlyRix - *Initial work* - [SlyRix](https://github.com/SlyRix/wedapp)
 
-## Contact
+## 🙏 Acknowledgments
 
-Your Name - your.email@example.com
-Project Link: [https://github.com/yourusername/wedding-photo-app](https://github.com/yourusername/wedding-photo-app)
+- [React](https://reactjs.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Lucide Icons](https://lucide.dev/)
+- [ShadcnUI](https://ui.shadcn.com/)
+- All contributors who have helped shape this project
+

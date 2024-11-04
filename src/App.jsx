@@ -1263,26 +1263,21 @@ function App() {
         </div>
     );
 
-    const renderChallenges = () => (
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-2 border-wedding-purple-light">
-            <h2 className="text-2xl font-serif mb-4 text-wedding-purple-dark">Photo Challenges</h2>
-            <div className="space-y-6">
+    const renderChallenges = () => {
+        return (
+            <div className="max-w-4xl mx-auto space-y-4">
                 {challenges.map((challenge) => {
                     const hasUploadedPhoto = challengePhotos[challenge.id]?.some(
                         photo => photo.uploadedBy === guestName
                     ) && !challenge.isPrivate;
 
                     const handleVoteUpdate = async () => {
-                        // Refresh the challenge photos immediately
                         await fetchChallengePhotos(challenge.id);
-
-                        // Also refresh the vote status for this challenge
                         const voteStatusResponse = await fetch(
                             `${API_URL}/challenges/${challenge.id}/vote-status?userName=${guestName}`
                         );
                         const voteStatusData = await voteStatusResponse.json();
 
-                        // Update the challenge vote status in state
                         setChallengeVoteStatus(prevStatus => ({
                             ...prevStatus,
                             [challenge.id]: {
@@ -1291,33 +1286,36 @@ function App() {
                             }
                         }));
                     };
+
                     return (
                         <div
                             key={challenge.id}
-                            className={`border-2 rounded-lg p-6 relative ${
+                            className={`border rounded-lg overflow-hidden ${
                                 completedChallenges.has(challenge.id)
-                                    ? 'bg-wedding-green-light/20 border-wedding-green'
-                                    : 'bg-white border-wedding-purple-light'
+                                    ? 'border-wedding-green bg-wedding-green-light/5'
+                                    : 'border-wedding-purple-light/30 bg-white'
                             }`}
                         >
-                            {completedChallenges.has(challenge.id) && !challenge.isPrivate && (
-                                <div className="absolute top-4 right-4">
-                                    <CheckCircle className="text-wedding-green-dark" size={24}/>
+                            {/* Challenge Header */}
+                            <div className="p-4 sm:p-6">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1">
+                                        <h3 className="text-xl font-medium text-wedding-purple-dark">
+                                            {challenge.title}
+                                        </h3>
+                                        <p className="text-wedding-purple mt-2">
+                                            {challenge.description}
+                                        </p>
+                                    </div>
+                                    {completedChallenges.has(challenge.id) && !challenge.isPrivate && (
+                                        <CheckCircle className="w-6 h-6 text-wedding-green flex-shrink-0" />
+                                    )}
                                 </div>
-                            )}
-
-                            <div className="mb-4">
-                                <h3 className="text-xl font-semibold text-wedding-purple-dark mb-2">
-                                    {challenge.title}
-                                </h3>
-                                <p className="text-wedding-purple">
-                                    {challenge.description}
-                                </p>
                             </div>
 
-                            {/* Show Leaderboard if challenge is active */}
+                            {/* Leaderboard Section */}
                             {!challenge.isPrivate && (
-                                <div className="mb-6">
+                                <div className="px-4 sm:px-6">
                                     <ChallengeLeaderboard
                                         challengeId={challenge.id}
                                         challengeTitle={challenge.title}
@@ -1327,51 +1325,62 @@ function App() {
                                 </div>
                             )}
 
-                            <PhotoUploader
-                                challengeMode={true}
-                                challengeId={challenge.id}
-                                onUpload={uploadChallengeFile}
-                                loading={loading && activeChallenge === challenge.id}
-                                deviceInfo={deviceInfo}
-                                setNotification={setNotification}
-                                isCompleted={completedChallenges.has(challenge.id)}
-                                challengeTitle={challenge.title}
-                                isPrivate={challenge.isPrivate}
-                                guestName={guestName}
-                                challengePhotos={challengePhotos[challenge.id] || []}
-                                uploadProgress={challengeUploadProgress[challenge.id] || 0}  // Add this line
-                            />
+                            {/* Upload Section */}
+                            <div className="p-4 sm:p-6 border-t border-wedding-purple-light/10">
+                                <PhotoUploader
+                                    challengeMode={true}
+                                    challengeId={challenge.id}
+                                    onUpload={uploadChallengeFile}
+                                    loading={loading && activeChallenge === challenge.id}
+                                    deviceInfo={deviceInfo}
+                                    setNotification={setNotification}
+                                    isCompleted={completedChallenges.has(challenge.id)}
+                                    isPrivate={challenge.isPrivate}
+                                    challengeTitle={challenge.title}
+                                    guestName={guestName}
+                                    challengePhotos={challengePhotos[challenge.id] || []}
+                                    uploadProgress={challengeUploadProgress[challenge.id] || 0}
+                                />
+                            </div>
 
                             {/* Photos Grid */}
-                            {/* Photos Grid */}
                             {!challenge.isPrivate && hasUploadedPhoto && challengePhotos[challenge.id] && (
-                                <div className="mt-6">
+                                <div className="border-t border-wedding-purple-light/10">
                                     <button
                                         onClick={() => toggleChallenge(challenge.id)}
-                                        className="w-full flex justify-between items-center text-lg font-medium text-wedding-purple-dark p-2 hover:bg-wedding-green-light/10 rounded"
+                                        className="w-full flex justify-between items-center p-4 hover:bg-wedding-purple-light/5 transition-colors"
                                     >
-                                        <span>Challenge Photos ({challengePhotos[challenge.id].length})</span>
+                                    <span className="text-lg font-medium text-wedding-purple-dark flex items-center gap-2">
+                                        <Camera className="w-5 h-5" />
+                                        Challenge Photos ({challengePhotos[challenge.id].length})
+                                    </span>
                                         <ChevronDown
-                                            className={`transform transition-transform ${
+                                            className={`w-5 h-5 text-wedding-purple-light transition-transform ${
                                                 expandedChallenges.has(challenge.id) ? 'rotate-180' : ''
                                             }`}
                                         />
                                     </button>
+
                                     {expandedChallenges.has(challenge.id) && (
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
+                                        <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                                             {challengePhotos[challenge.id].map((photo) => (
-                                                <div key={photo.id} className="bg-wedding-green-light/10 p-2 rounded">
-                                                    <OptimizedImage
-                                                        src={`${API_URL}/uploads/${photo.filename}`}
-                                                        alt={`Photo by ${photo.uploadedBy}`}
-                                                        className="w-full h-[200px] object-contain rounded cursor-pointer"
+                                                <div key={photo.id} className="space-y-2">
+                                                    <div
+                                                        className="aspect-square rounded-lg overflow-hidden bg-wedding-purple-light/5 cursor-pointer group relative"
                                                         onClick={() => {
                                                             setActiveChallenge(challenge.id);
                                                             setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
                                                         }}
-                                                    />
-                                                    <div className="mt-2">
-                                                        <p className="text-sm text-wedding-purple">
+                                                    >
+                                                        <img
+                                                            src={`${API_URL}/uploads/${photo.filename}`}
+                                                            alt={`By ${photo.uploadedBy}`}
+                                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                        />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <p className="text-sm font-medium text-wedding-purple-dark">
                                                             By: {photo.uploadedBy}
                                                         </p>
                                                         <ChallengeInteractions
@@ -1393,8 +1402,8 @@ function App() {
                     );
                 })}
             </div>
-        </div>
-    );
+        );
+    };
 
     const renderPhotoGallery = () => {
         const photosToDisplay = isAdmin ? allPhotos : photos.filter(photo => {
