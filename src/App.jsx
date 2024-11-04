@@ -1578,8 +1578,11 @@ function App() {
                                 />
                                 {/* Three-dot menu icon */}
                                 <div className="absolute top-2 right-2 z-10">
-                                    <button onClick={(e) => handleDeleteClick(e, photo)}>
-                                        <Trash className="w-4 h-4 text-white " />
+                                    <button
+                                        onClick={(e) => handleDeleteClick(e, photo)}
+                                        className="p-2 rounded-full bg-black/50 hover:bg-black/70 shadow-lg transition-all duration-300"
+                                    >
+                                        <Trash className="w-4 h-4 text-white"/>
                                     </button>
                                 </div>
 
