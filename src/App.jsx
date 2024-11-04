@@ -979,26 +979,11 @@ function App() {
             className="min-h-screen bg-gradient-to-br from-wedding-accent-light to-wedding-green-light/20 flex items-center justify-center"
         >
             <Card
-                className="relative bg-white/95 backdrop-blur-sm p-12 rounded-lg shadow-xl max-w-md w-full border border-wedding-purple-light/30"
-            >
-                <div className="absolute left-0 right-0 -top-14 flex justify-center">
-                    <style>{fontStyles}</style>
-                    <motion.div
-                        initial={{y: -10}}
-                        animate={{y: 0}}
-                        transition={{
-                            type: "spring",
-                            stiffness: 300,
-                            damping: 20
-                        }}
-                    >
-                        {/*<Heart className="w-12 h-12 text-wedding-purple fill-wedding-purple"/>*/}
-                    </motion.div>
-                </div>
-
+                className="relative bg-white/95 backdrop-blur-sm p-6 sm:p-12 rounded-lg shadow-xl max-w-md w-full border border-wedding-purple-light/30">
                 <CardContent className="text-center mb-8 mt-4">
-                    {/* Heart background with relative positioning */}
                     <div className="relative h-32">
+                        <style>{fontStyles}</style>
+
                         {/* Animated heart background */}
                         <motion.div
                             animate={{
@@ -1045,11 +1030,16 @@ function App() {
                             </motion.div>
                             <div className="h-px bg-wedding-purple-light flex-1 max-w-[100px]"/>
                         </div>
-                        <Badge variant="outline" className="font-['Quicksand'] text-wedding-purple-light italic mb-4">
-                            Share your moments with us
-                        </Badge>
 
-
+                        {/* Badge with proper mobile styling */}
+                        <div className="flex justify-center px-4">
+                            <Badge
+                                variant="outline"
+                                className="font-['Quicksand'] text-wedding-purple-light italic text-sm sm:text-base px-4 py-1 whitespace-nowrap border-wedding-purple-light/30 bg-white/50"
+                            >
+                                Share your moments with us
+                            </Badge>
+                        </div>
                     </div>
                 </CardContent>
 
@@ -1069,26 +1059,26 @@ function App() {
                         />
                         <Camera className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-wedding-purple-light"/>
                     </div>
-                    <Button
+                    <button
                         type="submit"
                         className="font-['Quicksand'] w-full bg-wedding-purple text-white p-3 rounded-full hover:bg-wedding-purple-dark transition duration-300 shadow-lg flex items-center justify-center gap-2 group"
                     >
                         <span>Join the Celebration</span>
                         <Heart className="w-4 h-4 group-hover:fill-white transition-colors"/>
-                    </Button>
+                    </button>
                 </form>
             </Card>
         </motion.div>
     );
-    const EnhancedPhotoGallery = ({ photos, onImageClick, API_URL }) => {
+    const EnhancedPhotoGallery = ({photos, onImageClick, API_URL}) => {
         return (
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
                 {photos.map((photo) => (
                     <motion.div
                         key={photo.id}
                         className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
-                        whileHover={{ y: -2 }}
-                        transition={{ duration: 0.2 }}
+                        whileHover={{y: -2}}
+                        transition={{duration: 0.2}}
                         onClick={() => onImageClick(`${API_URL}/uploads/${photo.filename}`)}
                     >
                         <img
@@ -1098,10 +1088,12 @@ function App() {
                         />
 
                         {/* Gradient overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div
+                            className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
 
                         {/* Photo info */}
-                        <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
+                        <div
+                            className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
                             <p className="text-sm sm:text-base font-medium truncate">
                                 {photo.uploadedBy || 'Unknown Guest'}
                             </p>
@@ -1152,7 +1144,7 @@ function App() {
                     >
                         <Calendar className="w-5 h-5"/>
                         <p className="font-['Great_Vibes'] text-2xl">
-                            10th November 2024
+                        10th November 2024
                         </p>
                     </motion.div>
 
