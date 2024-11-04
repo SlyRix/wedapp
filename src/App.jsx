@@ -1398,6 +1398,36 @@ function App() {
     };
 
     const renderPhotoGallery = () => {
+        const handleDeleteClick = (e, photo) => {
+            e.stopPropagation(); // Prevent opening the photo modal
+            setPhotoToDelete(photo);
+            setShowDeleteConfirm(true);
+        };
+
+        const confirmDelete = async () => {
+            if (!photoToDelete) return;
+
+            setDeletingId(photoToDelete.id);
+            try {
+                const response = await fetch(
+                    `${API_URL}/photos/${photoToDelete.id}?userName=${guestName}`,
+                    { method: 'DELETE' }
+                );
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete photo');
+                }
+
+                onDelete(photoToDelete.id);
+                setShowDeleteConfirm(false);
+                setPhotoToDelete(null);
+            } catch (error) {
+                console.error('Error deleting photo:', error);
+            } finally {
+                setDeletingId(null);
+            }
+        };
+
         const photosToDisplay = isAdmin ? allPhotos : photos.filter(photo => {
             let metadata;
             try {

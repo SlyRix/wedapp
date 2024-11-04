@@ -107,7 +107,7 @@ const ChallengeLeaderboard = ({
                             className="flex flex-col items-center"
                         >
                             <div className={`relative ${posInfo.bgColor} border-2 ${posInfo.borderColor} 
-                                rounded-lg p-1 shadow-sm ${position === 0 ? '-mb-4' : ''}`}>
+                                rounded-lg p-1 shadow-sm ${position === 0 ? '-mb-0' : ''}`}>
                                 <img
                                     src={`${API_URL}/uploads/${photo.filename}`}
                                     alt={`Photo by ${photo.uploadedBy}`}
