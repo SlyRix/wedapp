@@ -22,6 +22,7 @@ const ChallengeInteractions = ({
     const [newComment, setNewComment] = useState('');
     const [error, setError] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [localComments, setLocalComments] = useState([]);
 
     const API_URL = 'https://engagement-photos-api.slyrix.com/api';
 
@@ -43,6 +44,7 @@ const ChallengeInteractions = ({
                 setLikes(likesData.likes);
                 setIsLiked(likesData.hasLiked);
                 setComments(commentsData || []);
+                setLocalComments(commentsData || []);
             } catch (error) {
                 console.error('Error fetching social data:', error);
                 if (isSubscribed) {
@@ -149,10 +151,22 @@ const ChallengeInteractions = ({
     const handleAddComment = async (e) => {
         e.preventDefault();
         const trimmedComment = newComment.trim();
-        if (!trimmedComment || isLoading || isSubmitting) return;
+        if (!trimmedComment || isSubmitting) return;
 
         try {
             setIsSubmitting(true);
+
+            // Optimistically add the comment locally
+            const tempComment = {
+                id: `temp-${Date.now()}`,
+                user_name: currentUser,
+                comment_text: trimmedComment,
+                created_at: new Date().toISOString()
+            };
+
+            setLocalComments(prevComments => [tempComment, ...prevComments]);
+            setNewComment(''); // Clear input immediately
+
             const response = await fetch(`${API_URL}/photos/${photoId}/comments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -162,46 +176,115 @@ const ChallengeInteractions = ({
                 })
             });
 
-            if (!response.ok) throw new Error('Failed to add comment');
-            setNewComment('');
-            await fetchSocialData();
+            if (!response.ok) {
+                throw new Error('Failed to add comment');
+            }
+
+            // Fetch the latest comments to ensure consistency
+            const updatedCommentsRes = await fetch(`${API_URL}/photos/${photoId}/comments`);
+            const updatedComments = await updatedCommentsRes.json();
+            setComments(updatedComments);
+            setLocalComments(updatedComments);
+
         } catch (error) {
             setError('Failed to add comment');
             console.error('Error adding comment:', error);
+            // Remove the optimistic comment if there was an error
+            setLocalComments(prevComments =>
+                prevComments.filter(comment => comment.id !== `temp-${Date.now()}`)
+            );
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const CommentsModal = () => {
+        const inputRef = React.useRef(null);
+
         useEffect(() => {
             document.body.style.overflow = 'hidden';
+            inputRef.current?.focus();
+
             return () => {
                 document.body.style.overflow = 'unset';
             };
         }, []);
 
+        const handleInputChange = (e) => {
+            e.preventDefault();
+            setNewComment(e.target.value);
+        };
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            const trimmedComment = newComment.trim();
+            if (!trimmedComment || isSubmitting) return;
+
+            try {
+                setIsSubmitting(true);
+
+                // Optimistically add the comment locally
+                const tempComment = {
+                    id: `temp-${Date.now()}`,
+                    user_name: currentUser,
+                    comment_text: trimmedComment,
+                    created_at: new Date().toISOString()
+                };
+
+                setLocalComments(prevComments => [tempComment, ...prevComments]);
+                setNewComment(''); // Clear input immediately
+
+                const response = await fetch(`${API_URL}/photos/${photoId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userName: currentUser,
+                        commentText: trimmedComment
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to add comment');
+                }
+
+                // Fetch the latest comments
+                const updatedCommentsRes = await fetch(`${API_URL}/photos/${photoId}/comments`);
+                const updatedComments = await updatedCommentsRes.json();
+                setComments(updatedComments);
+                setLocalComments(updatedComments);
+
+                // Refocus the input after successful submission
+                inputRef.current?.focus();
+
+            } catch (error) {
+                setError('Failed to add comment');
+                console.error('Error adding comment:', error);
+                // Remove the optimistic comment if there was an error
+                setLocalComments(prevComments =>
+                    prevComments.filter(comment => comment.id !== `temp-${Date.now()}`)
+                );
+            } finally {
+                setIsSubmitting(false);
+            }
+        };
+
         return createPortal(
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+            <div
                 className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
                 onClick={(e) => {
                     if (e.target === e.currentTarget) setShowComments(false);
                 }}
             >
-                <motion.div
-                    initial={{ y: "100%", opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: "100%", opacity: 0 }}
-                    className="w-full max-w-lg bg-white rounded-lg max-h-[80vh] flex flex-col mx-4"
+                <div
+                    className="w-full max-w-lg bg-white rounded-lg max-h-[80vh] flex flex-col mx-4 relative"
+                    onClick={(e) => e.stopPropagation()}
                 >
                     {/* Modal Header */}
                     <div className="flex items-center justify-between p-4 border-b">
                         <div className="flex items-center gap-2">
                             <MessageCircle className="w-4 h-4 text-wedding-purple" />
-                            <h3 className="text-sm font-medium text-wedding-purple">Comments ({comments.length})</h3>
+                            <h3 className="text-sm font-medium text-wedding-purple">
+                                Comments ({localComments.length})
+                            </h3>
                         </div>
                         <button
                             onClick={() => setShowComments(false)}
@@ -213,13 +296,16 @@ const ChallengeInteractions = ({
 
                     {/* Comments List */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                        {comments.length === 0 ? (
+                        {localComments.length === 0 ? (
                             <p className="text-center text-sm text-gray-500 py-4">
                                 No comments yet. Be the first to comment!
                             </p>
                         ) : (
-                            comments.map((comment) => (
-                                <div key={comment.id} className="flex gap-2">
+                            localComments.map((comment) => (
+                                <div
+                                    key={comment.id}
+                                    className="flex gap-2"
+                                >
                                     <div className="w-8 h-8 rounded-full bg-wedding-purple/10 flex items-center justify-center flex-shrink-0">
                                         <span className="text-sm font-medium text-wedding-purple">
                                             {comment.user_name.charAt(0).toUpperCase()}
@@ -239,28 +325,29 @@ const ChallengeInteractions = ({
                         )}
                     </div>
 
-                    {/* Comment Input */}
-                    <div className="border-t p-4">
-                        <form onSubmit={handleAddComment} className="flex gap-2">
+                    {/* Comment Input - Fixed at bottom */}
+                    <div className="border-t p-4 bg-white">
+                        <form onSubmit={handleSubmit} className="flex gap-2">
                             <input
+                                ref={inputRef}
                                 type="text"
                                 value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
+                                onChange={handleInputChange}
                                 placeholder="Add a comment..."
                                 className="flex-1 px-4 py-2 text-sm border rounded-full focus:ring-2 focus:ring-wedding-purple focus:border-transparent"
-                                disabled={isLoading}
+                                disabled={isSubmitting}
                             />
                             <button
                                 type="submit"
-                                disabled={!newComment.trim() || isLoading}
-                                className="p-2 rounded-full bg-wedding-purple text-white disabled:opacity-50"
+                                disabled={!newComment.trim() || isSubmitting}
+                                className="p-2 rounded-full bg-wedding-purple text-white disabled:opacity-50 flex-shrink-0"
                             >
                                 <Send className="w-4 h-4" />
                             </button>
                         </form>
                     </div>
-                </motion.div>
-            </motion.div>,
+                </div>
+            </div>,
             document.body
         );
     };
@@ -305,7 +392,7 @@ const ChallengeInteractions = ({
                         className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full hover:bg-gray-100 transition-colors"
                     >
                         <MessageCircle className="w-3 h-3 text-gray-500" />
-                        <span className="text-xs text-gray-600">{comments.length}</span>
+                        <span className="text-xs text-gray-600">{localComments.length}</span>
                     </button>
                 </div>
 
@@ -338,7 +425,16 @@ const ChallengeInteractions = ({
 
             {/* Comments Modal */}
             <AnimatePresence>
-                {showComments && <CommentsModal />}
+                {showComments && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50"
+                    >
+                        <CommentsModal />
+                    </motion.div>
+                )}
             </AnimatePresence>
         </div>
     );
