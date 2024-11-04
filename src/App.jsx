@@ -8,7 +8,10 @@ import AdminView from './components/AdminView';
 import VotingSystem from './components/VotingSystem';
 import ChallengeLeaderboard from './components/ChallengeLeaderboard';
 import ChallengeInteractions from './components/ChallengeInteractions';
+import { EllipsisVertical } from 'lucide-react'; // Or the appropriate icon
+// import DeleteConfirmModal from './components/DeleteConfirmModal'; // Adjust the import path if needed
 
+import { createPortal } from 'react-dom';
 
 import {
     CheckCircle, X, AlertCircle, Settings,
@@ -79,6 +82,55 @@ const challenges = [
         isPrivate: false
     },
 ];
+const DeleteConfirmModal = ({ onClose, onConfirm }) => {
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, []);
+
+    return createPortal(
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                onClick={e => e.stopPropagation()}
+                className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+            >
+                <h3 className="text-lg font-medium text-wedding-purple-dark mb-2">
+                    Confirm Delete
+                </h3>
+                <p className="text-wedding-purple mb-6">
+                    Are you sure you want to delete this photo? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 rounded-lg border border-wedding-purple-light/30 text-wedding-purple hover:bg-wedding-purple-light/10 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </motion.div>
+        </motion.div>,
+        document.body
+    );
+};
+
 
 function App() {
     const [challengeUploadProgress, setChallengeUploadProgress] = useState({});
@@ -111,6 +163,8 @@ function App() {
     const [comments, setComments] = useState({});
     const [reactions, setReactions] = useState({});
     const [challengeVoteStatus, setChallengeVoteStatus] = useState({});
+    const [photoToDelete, setPhotoToDelete] = useState(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const [adminStats, setAdminStats] = useState({
         totalUploads: 0,
@@ -1236,7 +1290,33 @@ function App() {
             </div>
         </div>
     );
+    const handleDeleteClick = (e, photo) => {
+        e.stopPropagation(); // Prevent opening the photo modal
+        setPhotoToDelete(photo);
+        setShowDeleteConfirm(true);
+    };
+    const confirmDelete = async () => {
+        if (!photoToDelete) return;
 
+        try {
+            const response = await fetch(
+                `${API_URL}/photos/${photoToDelete.id}?userName=${guestName}`,
+                { method: 'DELETE' }
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to delete photo');
+            }
+
+            // Refresh the gallery
+            fetchPhotos();
+
+            setShowDeleteConfirm(false);
+            setPhotoToDelete(null);
+        } catch (error) {
+            console.error('Error deleting photo:', error);
+        }
+    };
     const renderGeneralUpload = () => (
         <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8 border border-wedding-purple-light/30">
             <div className="text-center mb-6">
@@ -1407,7 +1487,6 @@ function App() {
         const confirmDelete = async () => {
             if (!photoToDelete) return;
 
-            setDeletingId(photoToDelete.id);
             try {
                 const response = await fetch(
                     `${API_URL}/photos/${photoToDelete.id}?userName=${guestName}`,
@@ -1418,13 +1497,25 @@ function App() {
                     throw new Error('Failed to delete photo');
                 }
 
-                onDelete(photoToDelete.id);
+                // Refresh the photos
+                await fetchPhotos();
+
+                // Show success notification
+                setNotification({
+                    message: 'Photo deleted successfully',
+                    type: 'success'
+                });
+
+                // Reset states
                 setShowDeleteConfirm(false);
                 setPhotoToDelete(null);
+
             } catch (error) {
                 console.error('Error deleting photo:', error);
-            } finally {
-                setDeletingId(null);
+                setNotification({
+                    message: 'Error deleting photo',
+                    type: 'error'
+                });
             }
         };
 
@@ -1485,6 +1576,12 @@ function App() {
                                     alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
                                     className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-105"
                                 />
+                                {/* Three-dot menu icon */}
+                                <div className="absolute top-2 right-2 z-10">
+                                    <button onClick={(e) => handleDeleteClick(e, photo)}>
+                                        <EllipsisVertical className="w-6 h-6 text-white"/>
+                                    </button>
+                                </div>
 
                                 {/* Gradient overlay */}
                                 <div
@@ -1515,6 +1612,18 @@ function App() {
                         }}
                     />
                 )}
+                {showDeleteConfirm && (
+                    <AnimatePresence>
+                        <DeleteConfirmModal
+                            onClose={() => {
+                                setShowDeleteConfirm(false);
+                                setPhotoToDelete(null);
+                            }}
+                            onConfirm={confirmDelete}
+                        />
+                    </AnimatePresence>
+                )}
+
             </div>
         );
     };
