@@ -2,6 +2,7 @@ import React, { useState, useMemo,useEffect } from 'react';
 import { Search, SlidersHorizontal, Calendar, User, Grid, List, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import MediaModal from "./MediaModal.jsx";
 
 const ImageModal = ({ image, onClose, photos, onNavigate }) => {
     const [touchStart, setTouchStart] = useState(null);
@@ -276,7 +277,8 @@ const EnhancedAdminGallery = ({ photos }) => {
             {/* Image Modal */}
             <AnimatePresence>
                 {selectedImage && (
-                    <ImageModal
+                    <MediaModal
+                        src={selectedImage}
                         image={selectedImage}
                         photos={filteredPhotos}
                         onClose={() => setSelectedImage(null)}

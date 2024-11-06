@@ -8,7 +8,8 @@ import AdminView from './components/AdminView';
 import VotingSystem from './components/VotingSystem';
 import ChallengeLeaderboard from './components/ChallengeLeaderboard';
 import ChallengeInteractions from './components/ChallengeInteractions';
-import { EllipsisVertical, Trash } from 'lucide-react'; // Or the appropriate icon
+import { EllipsisVertical, Trash, Play} from 'lucide-react'; // Or the appropriate icon
+import MediaModal from "./components/MediaModal";
 // import DeleteConfirmModal from './components/DeleteConfirmModal'; // Adjust the import path if needed
 
 import { createPortal } from 'react-dom';
@@ -424,9 +425,9 @@ function App() {
         try {
             const formData = new FormData();
 
-            // Add each file to the FormData
+            // Add each file to the FormData with the correct field name
             files.forEach((file) => {
-                formData.append('photos', file);
+                formData.append('files', file);
             });
 
             // Add metadata
@@ -459,21 +460,26 @@ function App() {
 
                 xhr.onload = () => {
                     if (xhr.status >= 200 && xhr.status < 300) {
-                        resolve(xhr.response);
+                        try {
+                            const response = JSON.parse(xhr.response);
+                            resolve(response);
+                        } catch (error) {
+                            reject(new Error('Invalid response format'));
+                        }
                     } else {
                         reject(new Error(`Server returned ${xhr.status}: ${xhr.statusText}`));
                     }
                 };
             });
 
-            xhr.timeout = 30000;
+            xhr.timeout = 60000; // Increased timeout for larger files
             xhr.send(formData);
 
             await uploadPromise;
 
             // Handle successful upload
             setNotification({
-                message: `Successfully uploaded ${files.length} ${files.length === 1 ? 'photo' : 'photos'}!`,
+                message: `Successfully uploaded ${files.length} ${files.length === 1 ? 'file' : 'files'}!`,
                 type: 'success'
             });
 
@@ -486,8 +492,7 @@ function App() {
 
         } catch (error) {
             console.error('Upload error:', error);
-
-            let errorMessage = 'Error uploading photos. Please try again.';
+            let errorMessage = 'Error uploading files. Please try again.';
 
             if (error.message.includes('Network error')) {
                 errorMessage = 'Network error occurred. Please check your internet connection.';
@@ -1358,6 +1363,77 @@ function App() {
                             }
                         }));
                     };
+                    const ChallengeMediaViewer = ({
+                                                      challenge,
+                                                      photos,
+                                                      onMediaClick,
+                                                      isCompleted,
+                                                      isPrivate,
+                                                      guestName
+                                                  }) => {
+                        return (
+                            <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                                {photos.map((photo) => (
+                                    <div key={photo.id} className="space-y-2">
+                                        <div
+                                            className="aspect-square rounded-lg overflow-hidden bg-wedding-purple-light/5 cursor-pointer group relative"
+                                            onClick={() => onMediaClick(photo)}
+                                        >
+                                            {photo.mediaType === 'video' ? (
+                                                <div className="relative w-full h-full">
+                                                    {/* Video thumbnail container */}
+                                                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                                                        <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                                                            {photo.filename.toLowerCase().endsWith('.mov') ? 'MOV' : 'MP4'}
+                                                        </div>
+
+                                                        {/* Play button overlay */}
+                                                        <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
+                                                            <Play className="w-6 h-6 text-white" />
+                                                        </div>
+                                                    </div>
+
+                                                    <video
+                                                        src={`${API_URL}/uploads/${photo.filename}`}
+                                                        className="w-full h-full object-cover"
+                                                        preload="metadata"
+                                                        muted
+                                                        playsInline
+                                                        onLoadedMetadata={(e) => {
+                                                            e.target.currentTime = 0;
+                                                            e.target.pause();
+                                                        }}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <img
+                                                    src={`${API_URL}/uploads/${photo.filename}`}
+                                                    alt={`By ${photo.uploadedBy}`}
+                                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                />
+                                            )}
+
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-medium text-wedding-purple-dark">
+                                                By: {photo.uploadedBy}
+                                            </p>
+                                            <ChallengeInteractions
+                                                photoId={photo.id}
+                                                currentUser={guestName}
+                                                challengeId={challenge.id}
+                                                uploadedBy={photo.uploadedBy}
+                                                onVoteChange={handleVoteUpdate}
+                                                votedPhotoId={challengeVoteStatus[challenge.id]?.votedPhotoId}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    };
 
                     return (
                         <div
@@ -1434,39 +1510,17 @@ function App() {
                                     </button>
 
                                     {expandedChallenges.has(challenge.id) && (
-                                        <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-                                            {challengePhotos[challenge.id].map((photo) => (
-                                                <div key={photo.id} className="space-y-2">
-                                                    <div
-                                                        className="aspect-square rounded-lg overflow-hidden bg-wedding-purple-light/5 cursor-pointer group relative"
-                                                        onClick={() => {
-                                                            setActiveChallenge(challenge.id);
-                                                            setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
-                                                        }}
-                                                    >
-                                                        <img
-                                                            src={`${API_URL}/uploads/${photo.filename}`}
-                                                            alt={`By ${photo.uploadedBy}`}
-                                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                                        />
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <p className="text-sm font-medium text-wedding-purple-dark">
-                                                            By: {photo.uploadedBy}
-                                                        </p>
-                                                        <ChallengeInteractions
-                                                            photoId={photo.id}
-                                                            currentUser={guestName}
-                                                            challengeId={challenge.id}
-                                                            uploadedBy={photo.uploadedBy}
-                                                            onVoteChange={handleVoteUpdate}
-                                                            votedPhotoId={challengeVoteStatus[challenge.id]?.votedPhotoId}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        <ChallengeMediaViewer
+                                            challenge={challenge}
+                                            photos={challengePhotos[challenge.id]}
+                                            onMediaClick={(photo) => {
+                                                setActiveChallenge(challenge.id);
+                                                setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
+                                            }}
+                                            isCompleted={completedChallenges.has(challenge.id)}
+                                            isPrivate={challenge.isPrivate}
+                                            guestName={guestName}
+                                        />
                                     )}
                                 </div>
                             )}
@@ -1564,54 +1618,92 @@ function App() {
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
                         {photosToDisplay.map((photo) => (
-                            <motion.div
-                                key={photo.id}
-                                className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
-                                whileHover={{y: -2}}
-                                transition={{duration: 0.2}}
-                                onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
-                            >
+                        <motion.div
+                            key={photo.id}
+                            className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
+                            whileHover={{y: -2}}
+                            transition={{duration: 0.2}}
+                            onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
+                        >
+                            {photo.mediaType === 'video' ? (
+                                <div className="relative w-full aspect-square">
+                                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                                        {/* Thumbnail container with video file type indicator */}
+                                        <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                                            {photo.filename.toLowerCase().endsWith('.mov') ? 'MOV' : 'MP4'}
+                                        </div>
+
+                                        {/* Play button overlay */}
+                                        <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
+                                            <Play className="w-6 h-6 text-white" />
+                                        </div>
+
+                                        {/* Optional: Video duration if available */}
+                                        {photo.duration && (
+                                            <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                                                {photo.duration}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Attempt to show thumbnail if possible, fallback to video element */}
+                                    {photo.filename.toLowerCase().endsWith('.mov') ? (
+                                        // For MOV files, show a video element that's muted and paused
+                                        <video
+                                            src={`${API_URL}/uploads/${photo.filename}`}
+                                            className="w-full h-full object-cover"
+                                            preload="metadata"
+                                            muted
+                                            playsInline
+                                            onLoadedMetadata={(e) => {
+                                                // Pause immediately after metadata is loaded
+                                                e.target.currentTime = 0;
+                                                e.target.pause();
+                                            }}
+                                        />
+                                    ) : (
+                                        // For MP4 files, use the video element which usually shows a thumbnail
+                                        <video
+                                            src={`${API_URL}/uploads/${photo.filename}`}
+                                            className="w-full h-full object-cover"
+                                            preload="metadata"
+                                            muted
+                                            playsInline
+                                        />
+                                    )}
+                                </div>
+                            ) : (
                                 <img
                                     src={`${API_URL}/uploads/${photo.filename}`}
                                     alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
                                     className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-105"
                                 />
-                                {/* Three-dot menu icon */}
-                                <div className="absolute top-2 right-2 z-10">
-                                    <button
-                                        onClick={(e) => handleDeleteClick(e, photo)}
-                                        className="p-2 rounded-full bg-black/50 hover:bg-black/70 shadow-lg transition-all duration-300"
-                                    >
-                                        <Trash className="w-4 h-4 text-white"/>
-                                    </button>
-                                </div>
+                            )}
 
-                                {/* Gradient overlay */}
-                                <div
-                                    className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
-
-                                {/* Photo info */}
-                                <div
-                                    className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
-                                    <p className="text-sm sm:text-base font-medium truncate">
-                                        {photo.uploadedBy || 'Unknown Guest'}
-                                    </p>
-                                    <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
-                                        {photo.uploadType || 'General'}
-                                        {photo.challengeInfo && ` - ${photo.challengeInfo}`}
-                                    </p>
-                                </div>
-                            </motion.div>
-                        ))}
+                            {/* Photo/Video info overlay */}
+                            <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
+                                <p className="text-sm sm:text-base font-medium truncate">
+                                    {photo.uploadedBy || 'Unknown Guest'}
+                                </p>
+                                <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
+                                    {photo.uploadType || 'General'}
+                                    {photo.challengeInfo && ` - ${photo.challengeInfo}`}
+                                </p>
+                            </div>
+                        </motion.div>
+                    ))}
                     </div>
                 )}
-
                 {selectedImage && (
-                    <ImageModal
-                        image={selectedImage}
+                    <MediaModal
+                        src={selectedImage}
+                        photos={photosToDisplay || []} // Make sure to pass the current photos array
                         onClose={() => {
                             setSelectedImage(null);
                             setActiveChallenge(null);
+                        }}
+                        onNavigate={(newSrc) => {
+                            setSelectedImage(newSrc);
                         }}
                     />
                 )}
@@ -1693,14 +1785,19 @@ function App() {
                     />
                 )}
                 {selectedImage && (
-                    <ImageModal
-                        image={selectedImage}
+                    <MediaModal
+                        src={selectedImage}
+                        photos={activeChallenge ? challengePhotos[activeChallenge] : photos}
                         onClose={() => {
                             setSelectedImage(null);
                             setActiveChallenge(null);
                         }}
+                        onNavigate={(newSrc) => {
+                            setSelectedImage(newSrc);
+                        }}
                     />
                 )}
+
             </div>
         </AnimatePresence>
 

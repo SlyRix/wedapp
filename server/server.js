@@ -96,18 +96,41 @@ const storage = multer.diskStorage({
         }
     }
 });
-
 // Create multer instance
+
 const upload = multer({
     storage: storage,
     limits: {
-        fileSize: 50 * 1024 * 1024, // 50MB limit
+        fileSize: 50 * 1024 * 1024, // 50MB limit for videos
         files: 30
     },
     fileFilter: (req, file, cb) => {
-        if (!file.mimetype.startsWith('image/') && !file.mimetype.startsWith('video/')) {
-            return cb(new Error('Only image and video files are allowed!'));
+        const allowedTypes = [
+            // Images
+            'image/jpeg',
+            'image/png',
+            'image/heic',
+            'image/heif',
+            // Videos
+            'video/mp4',
+            'video/quicktime',
+            'video/x-msvideo'
+        ];
+
+        if (!allowedTypes.includes(file.mimetype)) {
+            return cb(new Error('Unsupported file type'));
         }
+
+        // For videos, enforce stricter size limit
+        if (file.mimetype.startsWith('video/') && file.size > 50 * 1024 * 1024) {
+            return cb(new Error('Video file size exceeds 50MB limit'));
+        }
+
+        // For images, enforce 10MB limit
+        if (file.mimetype.startsWith('image/') && file.size > 10 * 1024 * 1024) {
+            return cb(new Error('Image file size exceeds 10MB limit'));
+        }
+
         cb(null, true);
     }
 });
@@ -233,7 +256,7 @@ const getDetailedDeviceInfo = (userAgent) => {
 };
 
 // Routes
-app.post('/api/upload', upload.array('photos', 30), async (req, res) => {
+app.post('/api/upload', upload.array('files', 30), async (req, res) => {
     try {
         const uploadedFiles = req.files;
         if (!uploadedFiles || uploadedFiles.length === 0) {
@@ -263,13 +286,15 @@ app.post('/api/upload', upload.array('photos', 30), async (req, res) => {
         for (const file of uploadedFiles) {
             console.log('Processing file:', file.filename);
 
+            const isVideo = file.mimetype.startsWith('video/');
             const fileMetadata = {
                 uploadedBy,
                 uploadDate: new Date().toISOString(),
                 deviceInfo,
                 uploadType,
                 challengeId,
-                challengeTitle
+                challengeTitle,
+                mediaType: isVideo ? 'video' : 'image'
             };
 
             try {
@@ -283,9 +308,10 @@ app.post('/api/upload', upload.array('photos', 30), async (req, res) => {
                         challengeId,
                         challengeTitle,
                         deviceInfo,
-                        uploadType
+                        uploadType,
+                        mediaType
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `, [
                     file.filename,
                     file.originalname,
@@ -295,7 +321,8 @@ app.post('/api/upload', upload.array('photos', 30), async (req, res) => {
                     challengeId,
                     challengeTitle,
                     deviceInfo,
-                    uploadType
+                    uploadType,
+                    fileMetadata.mediaType
                 ]);
 
                 results.push({
