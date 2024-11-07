@@ -1,12 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import {join, dirname} from 'path';
+import {fileURLToPath} from 'url';
 import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import {open} from 'sqlite';
 import fs from 'fs/promises';
-
+import sharp from 'sharp';
+import ffmpeg from 'fluent-ffmpeg';
+import {promisify} from 'util';
+import path from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -14,6 +17,7 @@ const port = 3001;
 
 // Create absolute path for uploads directory
 const UPLOADS_DIR = join(__dirname, 'uploads');
+const THUMBNAILS_DIR = join(__dirname, 'thumbnails');
 
 // Single CORS configuration
 const allowedOrigins = [
@@ -30,7 +34,25 @@ const allowedOrigins = [
     'https://engagement-photos.slyrix.com',
 
 ];
+app.use('/api/uploads', express.static(UPLOADS_DIR));
+app.use('/api/thumbnails', express.static(THUMBNAILS_DIR));
 
+// Make sure the directories exist on startup
+const ensureDirectories = async () => {
+    try {
+        await Promise.all([
+            fs.access(UPLOADS_DIR).catch(() => fs.mkdir(UPLOADS_DIR, { recursive: true })),
+            fs.access(THUMBNAILS_DIR).catch(() => fs.mkdir(THUMBNAILS_DIR, { recursive: true }))
+        ]);
+        console.log('Created directories:', {
+            uploads: UPLOADS_DIR,
+            thumbnails: THUMBNAILS_DIR
+        });
+    } catch (error) {
+        console.error('Error creating directories:', error);
+        throw error;
+    }
+};
 const corsOptions = {
     origin: function (origin, callback) {
         // Check if origin starts with http:// or https:// and remove it
@@ -54,11 +76,8 @@ app.options('*', cors());
 
 
 // Body parser middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Single static file serving configuration
-app.use('/api/uploads', express.static(UPLOADS_DIR));
+app.use(express.json({limit: '50mb'}));
+app.use(express.urlencoded({extended: true, limit: '50mb'}));
 
 // Directory creation function
 const ensureUploadsDir = async () => {
@@ -66,9 +85,101 @@ const ensureUploadsDir = async () => {
         await fs.access(UPLOADS_DIR);
     } catch (error) {
         if (error.code === 'ENOENT') {
-            await fs.mkdir(UPLOADS_DIR, { recursive: true });
+            await fs.mkdir(UPLOADS_DIR, {recursive: true});
             console.log('Created uploads directory:', UPLOADS_DIR);
         }
+    }
+};
+
+// Thumbnail generation functions
+const generateImageThumbnail = async (inputPath, outputPath) => {
+    try {
+        await sharp(inputPath)
+            .resize(300, 300, {
+                fit: 'cover',
+                position: 'center'
+            })
+            .jpeg({quality: 80})
+            .toFile(outputPath);
+
+        return true;
+    } catch (error) {
+        console.error('Error generating image thumbnail:', error);
+        return false;
+    }
+};
+
+const generateVideoThumbnail = async (inputPath, outputPath) => {
+    return new Promise((resolve, reject) => {
+        // Make sure the output path ends with .jpg
+        const jpgOutputPath = outputPath.replace(/\.[^/.]+$/, '.jpg');
+
+        ffmpeg(inputPath)
+            .screenshots({
+                timestamps: ['1'],    // Take thumbnail at 1 second
+                filename: path.basename(jpgOutputPath),
+                folder: path.dirname(jpgOutputPath),
+                size: '300x300',
+                format: 'jpg'        // Explicitly set the output format to jpg
+            })
+            .outputOptions([
+                '-frames:v', '1',     // Only take one frame
+                '-q:v', '2'          // High quality (2 is very good, 31 is worst)
+            ])
+            .on('end', () => {
+                console.log('Video thumbnail generated successfully:', jpgOutputPath);
+                resolve(true);
+            })
+            .on('error', (err) => {
+                console.error('Error generating video thumbnail:', err);
+                resolve(false);
+            });
+    });
+};
+
+// Update the handleFileUpload function to use .jpg extension for video thumbnails
+const handleFileUpload = async (file) => {
+    // For videos, use .jpg extension for thumbnail
+    const thumbnailExt = file.mimetype.startsWith('video/') ? '.jpg' : path.extname(file.filename);
+    const thumbnailFilename = `thumb_${path.basename(file.filename, path.extname(file.filename))}${thumbnailExt}`;
+    const thumbnailPath = join(THUMBNAILS_DIR, thumbnailFilename);
+    const originalPath = join(UPLOADS_DIR, file.filename);
+
+    let thumbnailGenerated = false;
+
+    try {
+        console.log('Processing file:', {
+            filename: file.filename,
+            mimetype: file.mimetype,
+            thumbnailPath: thumbnailPath
+        });
+
+        if (file.mimetype.startsWith('image/')) {
+            thumbnailGenerated = await generateImageThumbnail(
+                originalPath,
+                thumbnailPath
+            );
+            console.log('Image thumbnail generated:', thumbnailGenerated);
+        } else if (file.mimetype.startsWith('video/')) {
+            thumbnailGenerated = await generateVideoThumbnail(
+                originalPath,
+                thumbnailPath
+            );
+            console.log('Video thumbnail generated:', thumbnailGenerated);
+        }
+
+        return {
+            ...file,
+            thumbnailPath: thumbnailGenerated ? thumbnailFilename : null,
+            mediaType: file.mimetype.startsWith('video/') ? 'video' : 'image'
+        };
+    } catch (error) {
+        console.error('Error generating thumbnail:', error);
+        return {
+            ...file,
+            thumbnailPath: null,
+            mediaType: file.mimetype.startsWith('video/') ? 'video' : 'image'
+        };
     }
 };
 
@@ -144,79 +255,239 @@ const initializeDb = async () => {
             driver: sqlite3.Database
         });
         await db.exec(`
-    CREATE TABLE IF NOT EXISTS comments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        photo_id INTEGER NOT NULL,
-        user_name TEXT NOT NULL,
-        comment_text TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (photo_id) REFERENCES photos(id)
-    );
-`);
-
-        await db.exec(`
-    CREATE TABLE IF NOT EXISTS likes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        photo_id INTEGER NOT NULL,
-        user_name TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (photo_id) REFERENCES photos(id),
-        UNIQUE(photo_id, user_name)
-    );
-`);
-
-        await db.exec(`
-            CREATE TABLE IF NOT EXISTS photos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT NOT NULL,
-                originalName TEXT NOT NULL,
-                uploadedBy TEXT NOT NULL,
-                uploadDate TEXT NOT NULL,
-                description TEXT,
-                challengeId INTEGER,
-                challengeTitle TEXT,
-                deviceInfo TEXT,
-                uploadType TEXT
-            );
-
+            CREATE TABLE IF NOT EXISTS comments
+            (
+                id
+                INTEGER
+                PRIMARY
+                KEY
+                AUTOINCREMENT,
+                photo_id
+                INTEGER
+                NOT
+                NULL,
+                user_name
+                TEXT
+                NOT
+                NULL,
+                comment_text
+                TEXT
+                NOT
+                NULL,
+                created_at
+                TIMESTAMP
+                DEFAULT
+                CURRENT_TIMESTAMP,
+                FOREIGN
+                KEY
+            (
+                photo_id
+            ) REFERENCES photos
+            (
+                id
+            )
+                );
         `);
+
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS likes
+            (
+                id
+                INTEGER
+                PRIMARY
+                KEY
+                AUTOINCREMENT,
+                photo_id
+                INTEGER
+                NOT
+                NULL,
+                user_name
+                TEXT
+                NOT
+                NULL,
+                created_at
+                TIMESTAMP
+                DEFAULT
+                CURRENT_TIMESTAMP,
+                FOREIGN
+                KEY
+            (
+                photo_id
+            ) REFERENCES photos
+            (
+                id
+            ),
+                UNIQUE
+            (
+                photo_id,
+                user_name
+            )
+                );
+        `);
+
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS photos
+            (
+                id
+                INTEGER
+                PRIMARY
+                KEY
+                AUTOINCREMENT,
+                filename
+                TEXT
+                NOT
+                NULL,
+                originalName
+                TEXT
+                NOT
+                NULL,
+                uploadedBy
+                TEXT
+                NOT
+                NULL,
+                uploadDate
+                TEXT
+                NOT
+                NULL,
+                description
+                TEXT,
+                challengeId
+                INTEGER,
+                challengeTitle
+                TEXT,
+                deviceInfo
+                TEXT,
+                uploadType
+                TEXT
+            );
+        `);
+
+        const tableInfo = await db.all(`PRAGMA table_info(photos)`);
+        const columns = tableInfo.map(col => col.name);
+
+        if (!columns.includes('thumbnailPath')) {
+            await db.exec('ALTER TABLE photos ADD COLUMN thumbnailPath TEXT;');
+            console.log('Added thumbnailPath column');
+        }
+
+        if (!columns.includes('mediaType')) {
+            await db.exec('ALTER TABLE photos ADD COLUMN mediaType TEXT;');
+            console.log('Added mediaType column');
+        }
 
         // Create likes table
         await db.exec(`
-          CREATE TABLE IF NOT EXISTS likes (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          photo_id INTEGER NOT NULL,
-          user_name TEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (photo_id) REFERENCES photos(id),
-          UNIQUE(photo_id, user_name)
-      );
-    `);
+            CREATE TABLE IF NOT EXISTS likes
+            (
+                id
+                INTEGER
+                PRIMARY
+                KEY
+                AUTOINCREMENT,
+                photo_id
+                INTEGER
+                NOT
+                NULL,
+                user_name
+                TEXT
+                NOT
+                NULL,
+                created_at
+                TIMESTAMP
+                DEFAULT
+                CURRENT_TIMESTAMP,
+                FOREIGN
+                KEY
+            (
+                photo_id
+            ) REFERENCES photos
+            (
+                id
+            ),
+                UNIQUE
+            (
+                photo_id,
+                user_name
+            )
+                );
+        `);
 
         // Create comments table
         await db.exec(`
-    CREATE TABLE IF NOT EXISTS comments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        photo_id INTEGER NOT NULL,
-        user_name TEXT NOT NULL,
-        comment_text TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (photo_id) REFERENCES photos(id)
-    );
-`);
+            CREATE TABLE IF NOT EXISTS comments
+            (
+                id
+                INTEGER
+                PRIMARY
+                KEY
+                AUTOINCREMENT,
+                photo_id
+                INTEGER
+                NOT
+                NULL,
+                user_name
+                TEXT
+                NOT
+                NULL,
+                comment_text
+                TEXT
+                NOT
+                NULL,
+                created_at
+                TIMESTAMP
+                DEFAULT
+                CURRENT_TIMESTAMP,
+                FOREIGN
+                KEY
+            (
+                photo_id
+            ) REFERENCES photos
+            (
+                id
+            )
+                );
+        `);
 
 // Create voting table for challenges
         await db.exec(`
-    CREATE TABLE IF NOT EXISTS votes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        photo_id INTEGER NOT NULL,
-        challenge_id INTEGER NOT NULL,
-        user_name TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (photo_id) REFERENCES photos(id),
-        UNIQUE(challenge_id, user_name)
-    );
-`);
+            CREATE TABLE IF NOT EXISTS votes
+            (
+                id
+                INTEGER
+                PRIMARY
+                KEY
+                AUTOINCREMENT,
+                photo_id
+                INTEGER
+                NOT
+                NULL,
+                challenge_id
+                INTEGER
+                NOT
+                NULL,
+                user_name
+                TEXT
+                NOT
+                NULL,
+                created_at
+                TIMESTAMP
+                DEFAULT
+                CURRENT_TIMESTAMP,
+                FOREIGN
+                KEY
+            (
+                photo_id
+            ) REFERENCES photos
+            (
+                id
+            ),
+                UNIQUE
+            (
+                challenge_id,
+                user_name
+            )
+                );
+        `);
 
         console.log('Database initialized successfully');
     } catch (error) {
@@ -263,17 +534,7 @@ app.post('/api/upload', upload.array('files', 30), async (req, res) => {
             throw new Error('No files were uploaded');
         }
 
-        console.log('Files received:', uploadedFiles.length);
-
-        // Parse metadata
-        let metadata;
-        try {
-            metadata = JSON.parse(req.body.metadata || '{}');
-        } catch (error) {
-            console.error('Metadata parsing error:', error);
-            metadata = {};
-        }
-
+        const metadata = JSON.parse(req.body.metadata || '{}');
         const {
             uploadedBy = 'Unknown',
             uploadType = 'General',
@@ -284,9 +545,8 @@ app.post('/api/upload', upload.array('files', 30), async (req, res) => {
 
         const results = [];
         for (const file of uploadedFiles) {
-            console.log('Processing file:', file.filename);
+            const processedFile = await handleFileUpload(file);
 
-            const isVideo = file.mimetype.startsWith('video/');
             const fileMetadata = {
                 uploadedBy,
                 uploadDate: new Date().toISOString(),
@@ -294,48 +554,44 @@ app.post('/api/upload', upload.array('files', 30), async (req, res) => {
                 uploadType,
                 challengeId,
                 challengeTitle,
-                mediaType: isVideo ? 'video' : 'image'
+                mediaType: file.mimetype.startsWith('video/') ? 'video' : 'image',
+                thumbnailPath: processedFile.thumbnailPath
             };
 
-            try {
-                const result = await db.run(`
-                    INSERT INTO photos (
-                        filename,
-                        originalName,
-                        uploadedBy,
-                        uploadDate,
-                        description,
-                        challengeId,
-                        challengeTitle,
-                        deviceInfo,
-                        uploadType,
-                        mediaType
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `, [
-                    file.filename,
-                    file.originalname,
-                    uploadedBy,
-                    fileMetadata.uploadDate,
-                    JSON.stringify(fileMetadata),
-                    challengeId,
-                    challengeTitle,
-                    deviceInfo,
-                    uploadType,
-                    fileMetadata.mediaType
-                ]);
+            const result = await db.run(`
+                INSERT INTO photos (filename,
+                                    originalName,
+                                    uploadedBy,
+                                    uploadDate,
+                                    description,
+                                    challengeId,
+                                    challengeTitle,
+                                    deviceInfo,
+                                    uploadType,
+                                    mediaType,
+                                    thumbnailPath)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                file.filename,
+                file.originalname,
+                uploadedBy,
+                fileMetadata.uploadDate,
+                JSON.stringify(fileMetadata),
+                challengeId,
+                challengeTitle,
+                deviceInfo,
+                uploadType,
+                fileMetadata.mediaType,
+                processedFile.thumbnailPath
+            ]);
 
-                results.push({
-                    id: result.lastID,
-                    filename: file.filename,
-                    ...fileMetadata
-                });
-            } catch (dbError) {
-                console.error('Database error for file:', file.filename, dbError);
-            }
+            results.push({
+                id: result.lastID,
+                filename: file.filename,
+                ...fileMetadata
+            });
         }
 
-        console.log('Upload completed successfully');
         res.json(results);
     } catch (error) {
         console.error('Upload processing error:', error);
@@ -345,7 +601,6 @@ app.post('/api/upload', upload.array('files', 30), async (req, res) => {
         });
     }
 });
-
 app.post('/api/challenge-upload', upload.single('photo'), async (req, res) => {
     try {
         const file = req.file;
@@ -353,10 +608,8 @@ app.post('/api/challenge-upload', upload.single('photo'), async (req, res) => {
             throw new Error('No file uploaded');
         }
 
-        console.log('Challenge upload received:', {
-            file: file.filename,
-            body: req.body
-        });
+        // Process the file for thumbnail
+        const processedFile = await handleFileUpload(file);
 
         const {
             uploadedBy,
@@ -376,10 +629,10 @@ app.post('/api/challenge-upload', upload.single('photo'), async (req, res) => {
             deviceInfo,
             uploadType: 'Challenge',
             challengeId,
-            challengeTitle
+            challengeTitle,
+            mediaType: file.mimetype.startsWith('video/') ? 'video' : 'image',
+            thumbnailPath: processedFile.thumbnailPath
         };
-
-        console.log('Processing challenge upload with metadata:', metadata);
 
         const result = await db.run(`
             INSERT INTO photos (
@@ -391,9 +644,11 @@ app.post('/api/challenge-upload', upload.single('photo'), async (req, res) => {
                 challengeId,
                 challengeTitle,
                 deviceInfo,
-                uploadType
+                uploadType,
+                mediaType,
+                thumbnailPath
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             file.filename,
             file.originalname,
@@ -403,7 +658,9 @@ app.post('/api/challenge-upload', upload.single('photo'), async (req, res) => {
             challengeId,
             challengeTitle,
             deviceInfo,
-            'Challenge'
+            'Challenge',
+            metadata.mediaType,
+            processedFile.thumbnailPath
         ]);
 
         console.log('Challenge upload completed successfully');
@@ -422,18 +679,20 @@ app.post('/api/challenge-upload', upload.single('photo'), async (req, res) => {
     }
 });
 
+
 app.get('/api/photos', async (req, res) => {
     try {
         const { uploadedBy } = req.query;
         let query = `
-            SELECT 
-                photos.*,
-                CASE 
-                    WHEN uploadType = 'Challenge' 
-                    THEN challengeTitle 
-                    ELSE NULL 
-                END as challengeInfo,
-                deviceInfo as uploadDevice
+            SELECT photos.*,
+                   CASE 
+                       WHEN uploadType = 'Challenge' 
+                       THEN challengeTitle 
+                       ELSE NULL 
+                   END as challengeInfo,
+                   deviceInfo as uploadDevice,
+                   thumbnailPath,
+                   mediaType
             FROM photos`;
         let params = [];
 
@@ -459,7 +718,9 @@ app.get('/api/photos', async (req, res) => {
                 ...photo,
                 name: photo.filename,
                 challengeInfo: photo.challengeInfo,
-                deviceInfo: photo.uploadDevice // renamed to be clearer
+                deviceInfo: photo.uploadDevice,
+                thumbnailPath: photo.thumbnailPath || null,
+                mediaType: photo.mediaType || 'image'
             };
         });
 
@@ -472,13 +733,12 @@ app.get('/api/photos', async (req, res) => {
 
 app.get('/api/challenge-photos/:challengeId', async (req, res) => {
     try {
-        const { challengeId } = req.params;
+        const {challengeId} = req.params;
         const photos = await db.all(`
-            SELECT 
-                p.*,
-                COUNT(v.id) as vote_count
+            SELECT p.*,
+                   COUNT(v.id) as vote_count
             FROM photos p
-            LEFT JOIN votes v ON p.id = v.photo_id
+                     LEFT JOIN votes v ON p.id = v.photo_id
             WHERE p.challengeId = ?
             GROUP BY p.id
             ORDER BY uploadDate DESC
@@ -487,13 +747,13 @@ app.get('/api/challenge-photos/:challengeId', async (req, res) => {
         res.json(photos);
     } catch (error) {
         console.error('Error fetching challenge photos:', error);
-        res.status(500).json({ error: 'Error fetching challenge photos' });
+        res.status(500).json({error: 'Error fetching challenge photos'});
     }
 });
 
 app.get('/api/photos/:photoId/likes', async (req, res) => {
     try {
-        const { photoId } = req.params;
+        const {photoId} = req.params;
 
         // Get likes count
         const likesCount = await db.get(
@@ -502,7 +762,7 @@ app.get('/api/photos/:photoId/likes', async (req, res) => {
         );
 
         // Check if current user has liked the photo
-        const { userName } = req.query;
+        const {userName} = req.query;
         const existingLike = await db.get(
             'SELECT * FROM likes WHERE photo_id = ? AND user_name = ?',
             [photoId, userName]
@@ -514,31 +774,32 @@ app.get('/api/photos/:photoId/likes', async (req, res) => {
         });
     } catch (error) {
         console.error('Error getting photo likes:', error);
-        res.status(500).json({ error: 'Error getting photo likes' });
+        res.status(500).json({error: 'Error getting photo likes'});
     }
 });
 
 app.get('/api/photos/:photoId/comments', async (req, res) => {
     try {
-        const { photoId } = req.params;
+        const {photoId} = req.params;
         const comments = await db.all(`
-            SELECT * FROM comments 
-            WHERE photo_id = ? 
+            SELECT *
+            FROM comments
+            WHERE photo_id = ?
             ORDER BY created_at DESC
         `, [photoId]);
 
         res.json(comments);
     } catch (error) {
         console.error('Error fetching comments:', error);
-        res.status(500).json({ error: 'Error fetching comments' });
+        res.status(500).json({error: 'Error fetching comments'});
     }
 });
 
 // Add a comment to a photo
 app.post('/api/photos/:photoId/comments', async (req, res) => {
     try {
-        const { photoId } = req.params;
-        const { userName, commentText } = req.body;
+        const {photoId} = req.params;
+        const {userName, commentText} = req.body;
 
         const result = await db.run(`
             INSERT INTO comments (photo_id, user_name, comment_text)
@@ -553,15 +814,15 @@ app.post('/api/photos/:photoId/comments', async (req, res) => {
         res.json(newComment);
     } catch (error) {
         console.error('Error adding comment:', error);
-        res.status(500).json({ error: 'Error adding comment' });
+        res.status(500).json({error: 'Error adding comment'});
     }
 });
 
 // Update likes endpoint to match client
 app.post('/api/photos/:photoId/likes', async (req, res) => {
     try {
-        const { photoId } = req.params;
-        const { userName } = req.body;
+        const {photoId} = req.params;
+        const {userName} = req.body;
 
         // Check if user already liked the photo
         const existingLike = await db.get(
@@ -575,25 +836,25 @@ app.post('/api/photos/:photoId/likes', async (req, res) => {
                 'DELETE FROM likes WHERE photo_id = ? AND user_name = ?',
                 [photoId, userName]
             );
-            res.json({ liked: false });
+            res.json({liked: false});
         } else {
             // Add like
             await db.run(
                 'INSERT INTO likes (photo_id, user_name) VALUES (?, ?)',
                 [photoId, userName]
             );
-            res.json({ liked: true });
+            res.json({liked: true});
         }
     } catch (error) {
         console.error('Error handling like:', error);
-        res.status(500).json({ error: 'Error handling like' });
+        res.status(500).json({error: 'Error handling like'});
     }
 });
 // Add a comment to a photo
 app.post('/api/photos/:photoId/comment', async (req, res) => {
     try {
-        const { photoId } = req.params;
-        const { userName, commentText } = req.body;
+        const {photoId} = req.params;
+        const {userName, commentText} = req.body;
 
         const result = await db.run(
             'INSERT INTO comments (photo_id, user_name, comment_text) VALUES (?, ?, ?)',
@@ -608,15 +869,15 @@ app.post('/api/photos/:photoId/comment', async (req, res) => {
         res.json(newComment);
     } catch (error) {
         console.error('Error adding comment:', error);
-        res.status(500).json({ error: 'Error adding comment' });
+        res.status(500).json({error: 'Error adding comment'});
     }
 });
 
 // Vote endpoint with one-vote-per-challenge logic
 app.post('/api/challenges/:challengeId/photos/:photoId/vote', async (req, res) => {
     try {
-        const { challengeId, photoId } = req.params;
-        const { userName } = req.body;
+        const {challengeId, photoId} = req.params;
+        const {userName} = req.body;
 
         // Start a transaction
         await db.run('BEGIN TRANSACTION');
@@ -656,11 +917,10 @@ app.post('/api/challenges/:challengeId/photos/:photoId/vote', async (req, res) =
 
         // Get updated vote counts for all photos in this challenge
         const voteCounts = await db.all(`
-            SELECT 
-                photo_id,
-                COUNT(*) as count 
-            FROM votes 
-            WHERE challenge_id = ? 
+            SELECT photo_id,
+                   COUNT(*) as count
+            FROM votes
+            WHERE challenge_id = ?
             GROUP BY photo_id
         `, [challengeId]);
 
@@ -681,7 +941,7 @@ app.post('/api/challenges/:challengeId/photos/:photoId/vote', async (req, res) =
     } catch (error) {
         await db.run('ROLLBACK');
         console.error('Error handling vote:', error);
-        res.status(500).json({ error: 'Error handling vote' });
+        res.status(500).json({error: 'Error handling vote'});
     }
 });
 
@@ -689,7 +949,7 @@ app.post('/api/challenges/:challengeId/photos/:photoId/vote', async (req, res) =
 // Get photo stats (likes, comments, votes)
 app.get('/api/photos/:photoId/stats', async (req, res) => {
     try {
-        const { photoId } = req.params;
+        const {photoId} = req.params;
 
         // Get likes count
         const likesCount = await db.get(
@@ -716,29 +976,29 @@ app.get('/api/photos/:photoId/stats', async (req, res) => {
         });
     } catch (error) {
         console.error('Error getting photo stats:', error);
-        res.status(500).json({ error: 'Error getting photo stats' });
+        res.status(500).json({error: 'Error getting photo stats'});
     }
 });
 
 app.get('/api/challenges/:challengeId/vote-status', async (req, res) => {
     try {
-        const { challengeId } = req.params;
-        const { userName } = req.query;
+        const {challengeId} = req.params;
+        const {userName} = req.query;
 
         // First, check if user has voted in this challenge
         const userVote = await db.get(`
-            SELECT photo_id 
-            FROM votes 
-            WHERE challenge_id = ? AND user_name = ?
+            SELECT photo_id
+            FROM votes
+            WHERE challenge_id = ?
+              AND user_name = ?
         `, [challengeId, userName]);
 
         // Get vote counts for all photos in this challenge
         const voteCounts = await db.all(`
-            SELECT 
-                photo_id,
-                COUNT(*) as count 
-            FROM votes 
-            WHERE challenge_id = ? 
+            SELECT photo_id,
+                   COUNT(*) as count
+            FROM votes
+            WHERE challenge_id = ?
             GROUP BY photo_id
         `, [challengeId]);
 
@@ -755,14 +1015,14 @@ app.get('/api/challenges/:challengeId/vote-status', async (req, res) => {
         });
     } catch (error) {
         console.error('Error checking vote status:', error);
-        res.status(500).json({ error: 'Error checking vote status' });
+        res.status(500).json({error: 'Error checking vote status'});
     }
 });
 // Vote status endpoint
 app.get('/api/challenges/:challengeId/photos/:photoId/vote-status', async (req, res) => {
     try {
-        const { challengeId, photoId } = req.params;
-        const { userName } = req.query;
+        const {challengeId, photoId} = req.params;
+        const {userName} = req.query;
 
         // Get current photo's vote count
         const voteCount = await db.get(
@@ -783,7 +1043,7 @@ app.get('/api/challenges/:challengeId/photos/:photoId/vote-status', async (req, 
         });
     } catch (error) {
         console.error('Error checking vote status:', error);
-        res.status(500).json({ error: 'Error checking vote status' });
+        res.status(500).json({error: 'Error checking vote status'});
     }
 });
 
@@ -850,22 +1110,20 @@ app.get('/api/challenges/:challengeId/photos/:photoId/vote-status', async (req, 
 // Get challenge leaderboard
 app.get('/api/challenges/:challengeId/leaderboard', async (req, res) => {
     try {
-        const { challengeId } = req.params;
+        const {challengeId} = req.params;
 
         // Get photos with vote counts and upload timestamp for tiebreaking
         const photos = await db.all(`
-            SELECT 
-                p.id as photo_id,
-                p.filename,
-                p.uploadedBy,
-                p.uploadDate,
-                COUNT(v.id) as vote_count
+            SELECT p.id        as photo_id,
+                   p.filename,
+                   p.uploadedBy,
+                   p.uploadDate,
+                   COUNT(v.id) as vote_count
             FROM photos p
-            LEFT JOIN votes v ON p.id = v.photo_id
+                     LEFT JOIN votes v ON p.id = v.photo_id
             WHERE p.challengeId = ?
             GROUP BY p.id
-            ORDER BY vote_count DESC, p.uploadDate ASC
-            LIMIT 3
+            ORDER BY vote_count DESC, p.uploadDate ASC LIMIT 3
         `, [challengeId]);
 
         // Calculate rankings with ties
@@ -891,7 +1149,7 @@ app.get('/api/challenges/:challengeId/leaderboard', async (req, res) => {
         res.json(rankedPhotos);
     } catch (error) {
         console.error('Error getting leaderboard:', error);
-        res.status(500).json({ error: 'Error getting leaderboard' });
+        res.status(500).json({error: 'Error getting leaderboard'});
     }
 });
 
@@ -905,8 +1163,8 @@ app.use((err, req, res, next) => {
 });
 app.delete('/api/photos/:photoId', async (req, res) => {
     try {
-        const { photoId } = req.params;
-        const { userName } = req.query;
+        const {photoId} = req.params;
+        const {userName} = req.query;
 
         // First get the photo to check ownership
         const photo = await db.get(
@@ -916,12 +1174,12 @@ app.delete('/api/photos/:photoId', async (req, res) => {
 
         // Check if photo exists
         if (!photo) {
-            return res.status(404).json({ error: 'Photo not found' });
+            return res.status(404).json({error: 'Photo not found'});
         }
 
         // Check if user owns the photo (or is admin)
         if (photo.uploadedBy !== userName) {
-            return res.status(403).json({ error: 'Unauthorized to delete this photo' });
+            return res.status(403).json({error: 'Unauthorized to delete this photo'});
         }
 
         // Get the filename to delete the actual file
@@ -942,10 +1200,10 @@ app.delete('/api/photos/:photoId', async (req, res) => {
         await db.run('DELETE FROM comments WHERE photo_id = ?', [photoId]);
         await db.run('DELETE FROM votes WHERE photo_id = ?', [photoId]);
 
-        res.json({ message: 'Photo deleted successfully' });
+        res.json({message: 'Photo deleted successfully'});
     } catch (error) {
         console.error('Error deleting photo:', error);
-        res.status(500).json({ error: 'Error deleting photo' });
+        res.status(500).json({error: 'Error deleting photo'});
     }
 });
 
@@ -958,6 +1216,7 @@ const initializeServer = async () => {
         app.listen(port, () => {
             console.log(`Server running on port ${port}`);
             console.log('Uploads directory:', UPLOADS_DIR);
+            console.log('Thumbnails directory:', THUMBNAILS_DIR);
         });
     } catch (error) {
         console.error('Server initialization error:', error);

@@ -332,7 +332,7 @@ const PhotoUploader = ({
                     </div>
 
                     <button
-                        onClick={() => onUpload(selectedFiles)}
+                        onClick={() => challengeMode ? onUpload(selectedFiles[0], challengeId) : onUpload(selectedFiles)}
                         disabled={loading || selectedFiles.length === 0}
                         className="w-full bg-wedding-purple text-white p-2 rounded hover:bg-wedding-purple-dark transition duration-300 disabled:bg-wedding-purple-light/50"
                     >

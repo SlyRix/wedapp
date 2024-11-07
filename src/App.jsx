@@ -486,7 +486,6 @@ function App() {
             // Clear states
             setSelectedFiles([]);
             setUploadProgress({});
-
             // Refresh photos
             await fetchPhotos();
 
@@ -1140,8 +1139,10 @@ function App() {
                         transition={{duration: 0.2}}
                         onClick={() => onImageClick(`${API_URL}/uploads/${photo.filename}`)}
                     >
-                        <img
+                        <OptimizedImage
                             src={`${API_URL}/uploads/${photo.filename}`}
+                            thumbnailPath={photo.thumbnailPath}
+                            mediaType={photo.mediaType}
                             alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
                             className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-105"
                         />
@@ -1478,8 +1479,8 @@ function App() {
                                 <PhotoUploader
                                     challengeMode={true}
                                     challengeId={challenge.id}
-                                    onUpload={uploadChallengeFile}
                                     loading={loading && activeChallenge === challenge.id}
+                                    onUpload={uploadChallengeFile}
                                     deviceInfo={deviceInfo}
                                     setNotification={setNotification}
                                     isCompleted={completedChallenges.has(challenge.id)}
@@ -1618,80 +1619,68 @@ function App() {
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
                         {photosToDisplay.map((photo) => (
-                        <motion.div
-                            key={photo.id}
-                            className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
-                            whileHover={{y: -2}}
-                            transition={{duration: 0.2}}
-                            onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
-                        >
-                            {photo.mediaType === 'video' ? (
-                                <div className="relative w-full aspect-square">
-                                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
-                                        {/* Thumbnail container with video file type indicator */}
-                                        <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                            <motion.div
+                                key={photo.id}
+                                className="group relative bg-wedding-accent-light rounded-lg sm:rounded-xl overflow-hidden shadow-md cursor-pointer"
+                                whileHover={{y: -2}}
+                                transition={{duration: 0.2}}
+                                onClick={() => setSelectedImage(`${API_URL}/uploads/${photo.filename}`)}
+                            >
+                                {photo.mediaType === 'video' ? (
+                                    <div className="relative w-full aspect-square">
+                                        <OptimizedImage
+                                            src={`${API_URL}/uploads/${photo.filename}`}
+                                            thumbnailPath={photo.thumbnailPath}
+                                            mediaType="video"
+                                            alt={`Video by ${photo.uploadedBy}`}
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute top-2 right-2 z-10">
+                                            <button
+                                                onClick={(e) => handleDeleteClick(e, photo)}
+                                                className="p-2 rounded-full bg-black/50 hover:bg-black/70 shadow-lg transition-all duration-300"
+                                            >
+                                                <Trash className="w-4 h-4 text-white"/>
+                                            </button>
+                                        </div>
+                                        {/* Video type indicator */}
+                                        <div
+                                            className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
                                             {photo.filename.toLowerCase().endsWith('.mov') ? 'MOV' : 'MP4'}
                                         </div>
-
-                                        {/* Play button overlay */}
-                                        <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
-                                            <Play className="w-6 h-6 text-white" />
-                                        </div>
-
-                                        {/* Optional: Video duration if available */}
-                                        {photo.duration && (
-                                            <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                                                {photo.duration}
-                                            </div>
-                                        )}
                                     </div>
+                                ) : (
+                                    <OptimizedImage
+                                        src={`${API_URL}/uploads/${photo.filename}`}
+                                        thumbnailPath={photo.thumbnailPath}
+                                        mediaType={photo.mediaType}
+                                        alt={`Photo by ${photo.uploadedBy}`}
+                                        className="w-full aspect-square object-cover"
+                                    />
 
-                                    {/* Attempt to show thumbnail if possible, fallback to video element */}
-                                    {photo.filename.toLowerCase().endsWith('.mov') ? (
-                                        // For MOV files, show a video element that's muted and paused
-                                        <video
-                                            src={`${API_URL}/uploads/${photo.filename}`}
-                                            className="w-full h-full object-cover"
-                                            preload="metadata"
-                                            muted
-                                            playsInline
-                                            onLoadedMetadata={(e) => {
-                                                // Pause immediately after metadata is loaded
-                                                e.target.currentTime = 0;
-                                                e.target.pause();
-                                            }}
-                                        />
-                                    ) : (
-                                        // For MP4 files, use the video element which usually shows a thumbnail
-                                        <video
-                                            src={`${API_URL}/uploads/${photo.filename}`}
-                                            className="w-full h-full object-cover"
-                                            preload="metadata"
-                                            muted
-                                            playsInline
-                                        />
-                                    )}
+
+                                )}
+                                <div className="absolute top-2 right-2 z-10">
+                                    <button
+                                        onClick={(e) => handleDeleteClick(e, photo)}
+                                        className="p-2 rounded-full bg-black/50 hover:bg-black/70 shadow-lg transition-all duration-300"
+                                    >
+                                        <Trash className="w-4 h-4 text-white"/>
+                                    </button>
                                 </div>
-                            ) : (
-                                <img
-                                    src={`${API_URL}/uploads/${photo.filename}`}
-                                    alt={`Photo by ${photo.uploadedBy || 'Unknown Guest'}`}
-                                    className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-105"
-                                />
-                            )}
-
-                            {/* Photo/Video info overlay */}
-                            <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
-                                <p className="text-sm sm:text-base font-medium truncate">
-                                    {photo.uploadedBy || 'Unknown Guest'}
-                                </p>
-                                <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
-                                    {photo.uploadType || 'General'}
-                                    {photo.challengeInfo && ` - ${photo.challengeInfo}`}
-                                </p>
-                            </div>
-                        </motion.div>
-                    ))}
+                                {/* Photo/Video info overlay */}
+                                <div
+                                    className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 text-white bg-gradient-to-t from-black/70 to-transparent sm:transform sm:translate-y-full sm:group-hover:translate-y-0 transition-transform duration-300">
+                                    <p className="text-sm sm:text-base font-medium truncate">
+                                        {photo.uploadedBy || 'Unknown Guest'}
+                                    </p>
+                                    <p className="text-xs sm:text-sm opacity-90 truncate hidden sm:block">
+                                        {photo.uploadType || 'General'}
+                                        {photo.challengeInfo && ` - ${photo.challengeInfo}`}
+                                    </p>
+                                </div>
+                            </motion.div>
+                        ))}
                     </div>
                 )}
                 {selectedImage && (
