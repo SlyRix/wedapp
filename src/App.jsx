@@ -601,9 +601,17 @@ function App() {
             });
 
             // Refresh photos
-            await fetchChallengePhotos(challengeId);
-            await fetchPhotos();
-
+            await Promise.all([
+                fetchChallengePhotos(challengeId),  // Refresh the specific challenge photos
+                fetchPhotos(),                      // Refresh all photos
+                // Load all challenges to update completion status
+                ...challenges.map(c => fetchChallengePhotos(c.id))
+            ]);
+            setCompletedChallenges(prev => {
+                const newCompleted = new Set(prev);
+                newCompleted.add(challengeId);
+                return newCompleted;
+            });
             setNotification({
                 message: 'Challenge photo uploaded successfully!',
                 type: 'success'
@@ -1354,6 +1362,7 @@ function App() {
                 loading={loading}
                 deviceInfo={deviceInfo}
                 setNotification={setNotification}
+                uploadProgress={uploadProgress}
             />
         </div>
     );

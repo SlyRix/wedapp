@@ -14,15 +14,23 @@ const PhotoUploader = ({
                            isPrivate = false,
                            guestName = '',
                            challengePhotos = [],
-                           uploadProgress = 0
+                           uploadProgress = 0,
+                           challengeTitle = '' // Add this prop
                        }) => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [isMobile, setIsMobile] = useState(false);
     const [currentUploads, setCurrentUploads] = useState(0);
-
+    const API_URL = 'https://engagement-photos-api.slyrix.com/api';
     // Calculate how many photos the current user has already uploaded for this challenge
     const remainingUploads = 3 - currentUploads;
 
+    const [mobileUploadStatus, setMobileUploadStatus] = useState({
+        isUploading: false,
+        progress: 0,
+        currentFile: null,
+        currentFileIndex: 0,
+        totalFiles: 0,
+    });
 
     useEffect(() => {
         const checkMobile = () => {
@@ -193,25 +201,9 @@ const PhotoUploader = ({
 
             setSelectedFiles(validFiles);
 
-            // Handle mobile uploads immediately
             if (isMobile) {
-                try {
-                    if (challengeMode && challengeId) {
-                        await onUpload(validFiles[0], parseInt(challengeId));
-                    } else {
-                        await onUpload(validFiles);
-                    }
-                    // Clear states after successful upload
-                    clearUploadStates();
-                } catch (error) {
-                    console.error('Upload error:', error);
-                    setNotification({
-                        message: 'Error uploading files. Please try again.',
-                        type: 'error'
-                    });
-                }
+                await handleMobileUpload(validFiles);
             } else {
-                // Desktop: Update parent's selected files
                 if (onFileSelect) {
                     onFileSelect(validFiles);
                 }
@@ -222,6 +214,52 @@ const PhotoUploader = ({
                 message: 'Error processing selected files. Please try again.',
                 type: 'error'
             });
+        }
+    };
+    const handleMobileUpload  = async (files) => {
+        if (!files.length) return;
+
+        setMobileUploadStatus({
+            isUploading: true,
+            progress: 0,
+            currentFile: files[0]?.name,
+            currentFileIndex: 1,
+            totalFiles: files.length
+        });
+
+        try {
+            if (challengeMode) {
+                await onUpload(files[0], challengeId);
+                clearUploadStates();
+            } else {
+                await onUpload(files);
+            }
+
+            setNotification({
+                message: challengeMode ?
+                    'Challenge photo uploaded successfully!' :
+                    `Successfully uploaded ${files.length} ${files.length === 1 ? 'file' : 'files'}!`,
+                type: 'success'
+            });
+
+            clearUploadStates();
+        } catch (error) {
+            console.error('Upload error:', error);
+            setNotification({
+                message: error.message || 'Error uploading files. Please try again.',
+                type: 'error'
+            });
+        } finally {
+            // Reset mobile upload status
+            setTimeout(() => {
+                setMobileUploadStatus({
+                    isUploading: false,
+                    progress: 0,
+                    currentFile: null,
+                    currentFileIndex: 0,
+                    totalFiles: 0
+                });
+            }, 1000);
         }
     };
 
@@ -255,6 +293,41 @@ const PhotoUploader = ({
     };
 
 
+    const renderMobileUploadStatus = () => {
+        if (!mobileUploadStatus.isUploading) return null;
+
+        return (
+            <div className="fixed inset-x-0 bottom-0 p-4 bg-white shadow-lg border-t border-wedding-purple-light/20 z-50">
+                <div className="max-w-md mx-auto space-y-2">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-wedding-purple border-t-transparent"/>
+                            <div className="flex flex-col">
+                            <span className="text-sm text-wedding-purple-dark">
+                                Uploading {mobileUploadStatus.currentFileIndex} of {mobileUploadStatus.totalFiles}
+                            </span>
+                                <span className="text-xs text-wedding-purple-light">
+                                {mobileUploadStatus.currentFile}
+                            </span>
+                            </div>
+                        </div>
+                        <span className="text-sm font-medium text-wedding-purple">
+                        {mobileUploadStatus.progress}%
+                    </span>
+                    </div>
+                    <div className="w-full bg-wedding-green-light/30 rounded-full h-2.5">
+                        <div
+                            className="bg-wedding-purple h-2.5 rounded-full transition-all duration-300 ease-in-out"
+                            style={{ width: `${mobileUploadStatus.progress}%` }}
+                        />
+                    </div>
+                    <div className="text-xs text-center text-wedding-purple-light">
+                        Total progress: {Math.round((mobileUploadStatus.currentFileIndex / mobileUploadStatus.totalFiles) * 100)}%
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const renderUploadLabel = () => {
         if (challengeMode) {
@@ -355,6 +428,7 @@ const PhotoUploader = ({
     };
 
     return (
+        <>
         <div className="space-y-4">
             <div className={challengeMode
                 ? `border-2 border-dashed ${isPrivate ? 'border-wedding-purple' : 'border-wedding-green'} rounded-lg p-4 text-center`
@@ -391,8 +465,11 @@ const PhotoUploader = ({
                         {loading ? 'Uploading...' : `Upload ${selectedFiles.length} File${selectedFiles.length !== 1 ? 's' : ''}`}
                     </button>
                 </div>
+
             )}
         </div>
+            {renderMobileUploadStatus()}
+        </>
     );
 };
 
