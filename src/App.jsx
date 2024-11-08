@@ -10,6 +10,8 @@ import ChallengeLeaderboard from './components/ChallengeLeaderboard';
 import ChallengeInteractions from './components/ChallengeInteractions';
 import { EllipsisVertical, Trash, Play} from 'lucide-react'; // Or the appropriate icon
 import MediaModal from "./components/MediaModal";
+import { useLoading, usePhotoLoading } from './components/LoadingProvider';
+
 // import DeleteConfirmModal from './components/DeleteConfirmModal'; // Adjust the import path if needed
 
 import { createPortal } from 'react-dom';
@@ -166,6 +168,8 @@ function App() {
     const [challengeVoteStatus, setChallengeVoteStatus] = useState({});
     const [photoToDelete, setPhotoToDelete] = useState(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const { LoadingIndicator, PhotoSkeleton, LeaderboardSkeleton } = useLoading();
+    const { isLoading: isGeneralLoading, fetchPhotosWithLoading } = usePhotoLoading();
 
     const [adminStats, setAdminStats] = useState({
         totalUploads: 0,
@@ -177,7 +181,7 @@ function App() {
 
     useEffect(() => {
         if (isLoggedIn) {
-            fetchPhotos();
+            fetchPhotosWithLoading(fetchPhotos);
             challenges.forEach(challenge => {
                 fetchChallengePhotos(challenge.id);
             });
@@ -200,6 +204,10 @@ function App() {
         if (/MSIE|Trident/i.test(userAgent)) return 'Internet Explorer';
         return 'Unknown Browser';
     };
+    const challengeLoadingHooks = {};
+    challenges.forEach(challenge => {
+        challengeLoadingHooks[challenge.id] = usePhotoLoading(challenge.id);
+    });
     const handleAddComment = async (photoId, comment) => {
         try {
             // Here you would typically make an API call to save the comment
@@ -729,48 +737,49 @@ function App() {
         }));
     };
     const fetchChallengePhotos = async (challengeId) => {
-        try {
-            const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch challenge photos');
-            }
-            const data = await response.json();
-            setChallengePhotos(prev => ({
-                ...prev,
-                [challengeId]: data
-            }));
+        const { fetchPhotosWithLoading } = challengeLoadingHooks[challengeId];
 
-            setCompletedChallenges(prevCompleted => {
-                const newCompleted = new Set(prevCompleted);
-                if (data.some(photo => photo.uploadedBy === guestName)) {
-                    newCompleted.add(challengeId);
-                } else {
-                    newCompleted.delete(challengeId);
+        await fetchPhotosWithLoading(async () => {
+            try {
+                const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch challenge photos');
                 }
-                return newCompleted;
-            });
-        } catch (error) {
-            console.error('Error fetching challenge photos:', error);
-            setNotification({
-                message: 'Error loading challenge photos',
-                type: 'error'
-            });
-        }
+                const data = await response.json();
+                setChallengePhotos(prev => ({
+                    ...prev,
+                    [challengeId]: data
+                }));
+
+                setCompletedChallenges(prevCompleted => {
+                    const newCompleted = new Set(prevCompleted);
+                    if (data.some(photo => photo.uploadedBy === guestName)) {
+                        newCompleted.add(challengeId);
+                    } else {
+                        newCompleted.delete(challengeId);
+                    }
+                    return newCompleted;
+                });
+            } catch (error) {
+                console.error('Error fetching challenge photos:', error);
+                setNotification({
+                    message: 'Error loading challenge photos',
+                    type: 'error'
+                });
+            }
+        });
     };
+
     const fetchPhotos = async (isAdminFetch = false) => {
-        setLoading(true);
         try {
             const url = (isAdminFetch || isAdmin)
                 ? `${API_URL}/photos`
                 : `${API_URL}/photos?uploadedBy=${encodeURIComponent(guestName)}`;
 
-            console.log('Fetching photos from:', url);
-
             const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to fetch photos');
 
             const data = await response.json();
-            console.log('Received photos:', data.length);
 
             if (isAdminFetch || isAdmin) {
                 setAllPhotos(data);
@@ -784,8 +793,6 @@ function App() {
                 message: 'Error loading photos. Please try again.',
                 type: 'error'
             });
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -1371,6 +1378,7 @@ function App() {
         return (
             <div className="max-w-4xl mx-auto space-y-4">
                 {challenges.map((challenge) => {
+                    const { isLoading } = challengeLoadingHooks[challenge.id];
                     const hasUploadedPhoto = challengePhotos[challenge.id]?.some(
                         photo => photo.uploadedBy === guestName
                     ) && !challenge.isPrivate;
@@ -1390,14 +1398,19 @@ function App() {
                             }
                         }));
                     };
+
                     const ChallengeMediaViewer = ({
                                                       challenge,
                                                       photos,
                                                       onMediaClick,
                                                       isCompleted,
                                                       isPrivate,
-                                                      guestName
+                                                      guestName,
+                                                      onVoteChange, // Add this prop
+                                                      challengeVoteStatus // Add this prop
                                                   }) => {
+                        const API_URL = 'https://engagement-photos-api.slyrix.com/api';
+
                         return (
                             <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {photos.map((photo) => (
@@ -1408,35 +1421,28 @@ function App() {
                                         >
                                             {photo.mediaType === 'video' ? (
                                                 <div className="relative w-full h-full">
-                                                    {/* Video thumbnail container */}
+                                                    <OptimizedImage
+                                                        src={`${API_URL}/uploads/${photo.filename}`}
+                                                        alt={`Video by ${photo.uploadedBy}`}
+                                                        mediaType="video"
+                                                        className="w-full h-full object-cover"
+                                                        thumbnailPath={photo.thumbnailPath}
+                                                    />
+                                                    <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                                                        {photo.filename.toLowerCase().endsWith('.mov') ? 'MOV' : 'MP4'}
+                                                    </div>
                                                     <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
-                                                        <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                                                            {photo.filename.toLowerCase().endsWith('.mov') ? 'MOV' : 'MP4'}
-                                                        </div>
-
-                                                        {/* Play button overlay */}
                                                         <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
                                                             <Play className="w-6 h-6 text-white" />
                                                         </div>
                                                     </div>
-
-                                                    <video
-                                                        src={`${API_URL}/uploads/${photo.filename}`}
-                                                        className="w-full h-full object-cover"
-                                                        preload="metadata"
-                                                        muted
-                                                        playsInline
-                                                        onLoadedMetadata={(e) => {
-                                                            e.target.currentTime = 0;
-                                                            e.target.pause();
-                                                        }}
-                                                    />
                                                 </div>
                                             ) : (
-                                                <img
+                                                <OptimizedImage
                                                     src={`${API_URL}/uploads/${photo.filename}`}
-                                                    alt={`By ${photo.uploadedBy}`}
+                                                    alt={`Photo by ${photo.uploadedBy}`}
                                                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                    thumbnailPath={photo.thumbnailPath}
                                                 />
                                             )}
 
@@ -1452,8 +1458,8 @@ function App() {
                                                 currentUser={guestName}
                                                 challengeId={challenge.id}
                                                 uploadedBy={photo.uploadedBy}
-                                                onVoteChange={handleVoteUpdate}
-                                                votedPhotoId={challengeVoteStatus[challenge.id]?.votedPhotoId}
+                                                onVoteChange={onVoteChange} // Pass through the callback
+                                                votedPhotoId={challengeVoteStatus?.[challenge.id]?.votedPhotoId}
                                             />
                                         </div>
                                     </div>
@@ -1461,6 +1467,7 @@ function App() {
                             </div>
                         );
                     };
+
 
                     return (
                         <div
@@ -1491,12 +1498,16 @@ function App() {
                             {/* Leaderboard Section */}
                             {!challenge.isPrivate && (
                                 <div className="px-4 sm:px-6">
-                                    <ChallengeLeaderboard
-                                        challengeId={challenge.id}
-                                        challengeTitle={challenge.title}
-                                        challengePhotos={challengePhotos[challenge.id] || []}
-                                        guestName={guestName}
-                                    />
+                                    {isLoading ? (
+                                        <LeaderboardSkeleton />
+                                    ) : (
+                                        <ChallengeLeaderboard
+                                            challengeId={challenge.id}
+                                            challengeTitle={challenge.title}
+                                            challengePhotos={challengePhotos[challenge.id] || []}
+                                            guestName={guestName}
+                                        />
+                                    )}
                                 </div>
                             )}
 
@@ -1634,9 +1645,11 @@ function App() {
                     </div>
                 </div>
 
-                {loading ? (
-                    <div className="text-center py-4 sm:py-8">
-                        <p className="text-wedding-purple-light italic">Loading moments...</p>
+                {isGeneralLoading ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
+                        {[...Array(6)].map((_, i) => (
+                            <PhotoSkeleton key={i} />
+                        ))}
                     </div>
                 ) : photosToDisplay.length === 0 ? (
                     <div className="text-center py-4 sm:py-8">
