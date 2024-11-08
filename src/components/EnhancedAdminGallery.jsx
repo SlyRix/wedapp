@@ -1,5 +1,5 @@
 import React, { useState, useMemo,useEffect } from 'react';
-import { Search, SlidersHorizontal, Calendar, User, Grid, List, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, SlidersHorizontal, Calendar, User, Grid, List, X, ChevronLeft, ChevronRight, Lock, Trophy, Image } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import MediaModal from "./MediaModal.jsx";
@@ -137,7 +137,9 @@ const EnhancedAdminGallery = ({ photos }) => {
     const [filters, setFilters] = useState({
         date: 'all',
         uploader: 'all',
-        type: 'all',
+        type: 'all',        // This will now handle general vs challenge photos
+        privacy: 'all',
+        challenge: 'all',   // This will handle specific challenges
         isOpen: false
     });
 
@@ -145,12 +147,21 @@ const EnhancedAdminGallery = ({ photos }) => {
     const [sortBy, setSortBy] = useState('newest');
 
     const filterOptions = useMemo(() => {
+        const challengeTitles = [...new Set(photos
+            .filter(photo => photo.challengeId)
+            .map(photo => photo.challengeTitle || `Challenge #${photo.challengeId}`))];
+
         return {
             dates: [...new Set(photos.map(photo =>
                 new Date(photo.uploadDate || photo.createdAt).toLocaleDateString()))],
             uploaders: [...new Set(photos.map(photo => photo.uploadedBy))],
-            types: [...new Set(photos.map(photo =>
-                photo.uploadType || (photo.challengeId ? 'Challenge' : 'General')))]
+            photoTypes: [
+                { value: 'all', label: 'All Photos' },
+                { value: 'general', label: 'General Photos' },
+                { value: 'challenge', label: 'Challenge Photos' }
+            ],
+            challenges: challengeTitles,
+            privacy: ['All', 'Private Only', 'Public Only']
         };
     }, [photos]);
 
@@ -163,10 +174,27 @@ const EnhancedAdminGallery = ({ photos }) => {
                     new Date(photo.uploadDate || photo.createdAt).toLocaleDateString() === filters.date;
                 const matchesUploader = filters.uploader === 'all' ||
                     photo.uploadedBy === filters.uploader;
-                const matchesType = filters.type === 'all' ||
-                    (photo.uploadType || (photo.challengeId ? 'Challenge' : 'General')) === filters.type;
 
-                return matchesSearch && matchesDate && matchesUploader && matchesType;
+                // Enhanced type matching
+                const matchesType = filters.type === 'all' ||
+                    (filters.type === 'general' && !photo.challengeId) ||
+                    (filters.type === 'challenge' && photo.challengeId);
+
+                // Privacy matching
+                const matchesPrivacy = filters.privacy === 'all' ||
+                    (filters.privacy === 'Private Only' && photo.isPrivate) ||
+                    (filters.privacy === 'Public Only' && !photo.isPrivate);
+
+                // Challenge matching (only apply if viewing challenge photos)
+                const matchesChallenge = filters.type !== 'general' && (
+                    filters.challenge === 'all' ||
+                    (photo.challengeTitle === filters.challenge) ||
+                    (photo.challengeId && `Challenge #${photo.challengeId}` === filters.challenge)
+                );
+
+                return matchesSearch && matchesDate && matchesUploader &&
+                    matchesType && matchesPrivacy &&
+                    (filters.type === 'general' || matchesChallenge);
             })
             .sort((a, b) => {
                 if (sortBy === 'newest') {
@@ -181,6 +209,92 @@ const EnhancedAdminGallery = ({ photos }) => {
     const handleImageClick = (photo) => {
         setSelectedImage(`${API_URL}/uploads/${photo.filename}`);
     };
+
+    // Filters Panel Component
+    const FiltersPanel = () => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-sm">
+            {/* Photo Type Filter */}
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-wedding-purple-dark flex items-center gap-2">
+                    <Image className="w-4 h-4" />
+                    Photo Type
+                </label>
+                <select
+                    value={filters.type}
+                    onChange={(e) => {
+                        setFilters(prev => ({
+                            ...prev,
+                            type: e.target.value,
+                            // Reset challenge filter when switching to general photos
+                            challenge: e.target.value === 'general' ? 'all' : prev.challenge
+                        }));
+                    }}
+                    className="w-full p-2 rounded-lg border border-wedding-purple-light/30 text-sm"
+                >
+                    {filterOptions.photoTypes.map(type => (
+                        <option key={type.value} value={type.value}>
+                            {type.label}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Challenge Filter - Only show when viewing challenge photos */}
+            {filters.type !== 'general' && (
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-wedding-purple-dark flex items-center gap-2">
+                        <Trophy className="w-4 h-4" />
+                        Challenge
+                    </label>
+                    <select
+                        value={filters.challenge}
+                        onChange={(e) => setFilters(prev => ({ ...prev, challenge: e.target.value }))}
+                        className="w-full p-2 rounded-lg border border-wedding-purple-light/30 text-sm"
+                    >
+                        <option value="all">All Challenges</option>
+                        {filterOptions.challenges.map(challenge => (
+                            <option key={challenge} value={challenge}>{challenge}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
+            {/* Privacy Filter */}
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-wedding-purple-dark flex items-center gap-2">
+                    <Lock className="w-4 h-4" />
+                    Privacy
+                </label>
+                <select
+                    value={filters.privacy}
+                    onChange={(e) => setFilters(prev => ({ ...prev, privacy: e.target.value }))}
+                    className="w-full p-2 rounded-lg border border-wedding-purple-light/30 text-sm"
+                >
+                    <option value="all">All Photos</option>
+                    <option value="Private Only">Private Only</option>
+                    <option value="Public Only">Public Only</option>
+                </select>
+            </div>
+
+            {/* Uploader Filter */}
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-wedding-purple-dark flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Uploader
+                </label>
+                <select
+                    value={filters.uploader}
+                    onChange={(e) => setFilters(prev => ({ ...prev, uploader: e.target.value }))}
+                    className="w-full p-2 rounded-lg border border-wedding-purple-light/30 text-sm"
+                >
+                    <option value="all">All Uploaders</option>
+                    {filterOptions.uploaders.map(uploader => (
+                        <option key={uploader} value={uploader}>{uploader}</option>
+                    ))}
+                </select>
+            </div>
+        </div>
+    );
 
     return (
         <div className="space-y-6">
@@ -230,13 +344,9 @@ const EnhancedAdminGallery = ({ photos }) => {
             </div>
 
             {/* Filters Panel */}
-            {filters.isOpen && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-sm">
-                    {/* Filter options remain the same */}
-                </div>
-            )}
+            {filters.isOpen && <FiltersPanel />}
 
-            {/* Photos Grid/List View */}
+            {/* Photos Grid/List View with improved type indicators */}
             <div className={viewMode === 'grid'
                 ? "grid grid-cols-2 md:grid-cols-3 gap-4"
                 : "space-y-4"
@@ -249,14 +359,28 @@ const EnhancedAdminGallery = ({ photos }) => {
                         }`}
                         onClick={() => handleImageClick(photo)}
                     >
-                        <img
-                            src={`${API_URL}/uploads/${photo.filename}`}
-                            alt={`Uploaded by ${photo.uploadedBy}`}
-                            className={viewMode === 'grid'
-                                ? "w-full aspect-square object-cover cursor-pointer"
-                                : "w-24 h-24 object-cover cursor-pointer"
-                            }
-                        />
+                        <div className="relative">
+                            <img
+                                src={`${API_URL}/uploads/${photo.filename}`}
+                                alt={`Uploaded by ${photo.uploadedBy}`}
+                                className={viewMode === 'grid'
+                                    ? "w-full aspect-square object-cover cursor-pointer"
+                                    : "w-24 h-24 object-cover cursor-pointer"
+                                }
+                            />
+                            <div className="absolute top-2 right-2 flex gap-1">
+                                {photo.isPrivate && (
+                                    <div className="bg-black/50 p-1 rounded-full">
+                                        <Lock className="w-4 h-4 text-white" />
+                                    </div>
+                                )}
+                                {photo.challengeId && (
+                                    <div className="bg-wedding-purple/50 p-1 rounded-full">
+                                        <Trophy className="w-4 h-4 text-white" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                         <div className="p-3">
                             <p className="font-medium text-wedding-purple-dark">
                                 {photo.uploadedBy}
@@ -265,9 +389,25 @@ const EnhancedAdminGallery = ({ photos }) => {
                                 {new Date(photo.uploadDate || photo.createdAt).toLocaleString()}
                             </p>
                             {viewMode === 'list' && (
-                                <p className="text-sm text-wedding-purple mt-1">
-                                    {photo.uploadType || (photo.challengeId ? `Challenge #${photo.challengeId}` : 'General Upload')}
-                                </p>
+                                <div className="mt-1 space-y-1">
+                                    <p className="text-sm text-wedding-purple">
+                                        {photo.challengeTitle || 'General Photo'}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        {photo.isPrivate && (
+                                            <span className="inline-flex items-center gap-1 text-xs text-wedding-purple-light">
+                                                <Lock className="w-3 h-3" />
+                                                Private
+                                            </span>
+                                        )}
+                                        {photo.challengeId && (
+                                            <span className="inline-flex items-center gap-1 text-xs text-wedding-purple">
+                                                <Trophy className="w-3 h-3" />
+                                                Challenge
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -279,7 +419,6 @@ const EnhancedAdminGallery = ({ photos }) => {
                 {selectedImage && (
                     <MediaModal
                         src={selectedImage}
-                        image={selectedImage}
                         photos={filteredPhotos}
                         onClose={() => setSelectedImage(null)}
                         onNavigate={setSelectedImage}
