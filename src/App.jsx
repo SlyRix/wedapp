@@ -723,13 +723,30 @@ function App() {
     const fetchChallengePhotos = async (challengeId) => {
         try {
             const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch challenge photos');
+            }
             const data = await response.json();
             setChallengePhotos(prev => ({
                 ...prev,
                 [challengeId]: data
             }));
+
+            setCompletedChallenges(prevCompleted => {
+                const newCompleted = new Set(prevCompleted);
+                if (data.some(photo => photo.uploadedBy === guestName)) {
+                    newCompleted.add(challengeId);
+                } else {
+                    newCompleted.delete(challengeId);
+                }
+                return newCompleted;
+            });
         } catch (error) {
             console.error('Error fetching challenge photos:', error);
+            setNotification({
+                message: 'Error loading challenge photos',
+                type: 'error'
+            });
         }
     };
     const fetchPhotos = async (isAdminFetch = false) => {
@@ -1554,7 +1571,15 @@ function App() {
 
                 // Refresh the photos
                 await fetchPhotos();
+                if (photoToDelete.challengeId) {
+                    await fetchChallengePhotos(photoToDelete.challengeId);
+                }
 
+                if (isAdmin) {
+                    for (const challenge of challenges) {
+                        await fetchChallengePhotos(challenge.id);
+                    }
+                }
                 // Show success notification
                 setNotification({
                     message: 'Photo deleted successfully',

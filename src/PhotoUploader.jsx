@@ -18,11 +18,11 @@ const PhotoUploader = ({
                        }) => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [isMobile, setIsMobile] = useState(false);
+    const [currentUploads, setCurrentUploads] = useState(0);
 
     // Calculate how many photos the current user has already uploaded for this challenge
-    const userChallengeUploads = challengeMode ?
-        challengePhotos.filter(photo => photo.uploadedBy === guestName).length : 0;
-    const remainingUploads = 3 - userChallengeUploads;
+    const remainingUploads = 3 - currentUploads;
+
 
     useEffect(() => {
         const checkMobile = () => {
@@ -40,6 +40,14 @@ const PhotoUploader = ({
         }
     }, [loading, uploadProgress]);
 
+    useEffect(() => {
+        if (challengeMode && challengePhotos) {
+            const uploadsCount = challengePhotos.filter(
+                photo => photo.uploadedBy === guestName
+            ).length;
+            setCurrentUploads(uploadsCount);
+        }
+    }, [challengeMode, challengePhotos, guestName]);
     const formatFileSize = (bytes) => {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -63,7 +71,7 @@ const PhotoUploader = ({
         const isImage = file.type.startsWith('image/');
         const isVideo = file.type.startsWith('video/');
 
-        if (challengeMode && userChallengeUploads >= 3) {
+        if (challengeMode && currentUploads >= 3) {
             return {
                 valid: false,
                 reason: 'You have reached the maximum limit of 3 photos for this challenge'
@@ -250,7 +258,7 @@ const PhotoUploader = ({
 
     const renderUploadLabel = () => {
         if (challengeMode) {
-            if (userChallengeUploads >= 3) {
+            if (currentUploads >= 3) {
                 return (
                     <>
                         <div className="mb-2 text-wedding-purple-light">
@@ -359,7 +367,7 @@ const PhotoUploader = ({
                     onChange={handleFileSelection}
                     className="hidden"
                     id={challengeMode ? `challenge-upload-${challengeId}` : "file-upload"}
-                    disabled={loading || (challengeMode && userChallengeUploads >= 3)}
+                    disabled={loading || (challengeMode && currentUploads >= 3)}
                 />
                 <label
                     htmlFor={challengeMode ? `challenge-upload-${challengeId}` : "file-upload"}
