@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Play, Pause, Volume2, VolumeX} from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -174,7 +174,8 @@ const MediaModal = ({ src, onClose, photos, onNavigate }) => {
                     <X className="w-8 h-8" />
                 </button>
 
-                <div className="absolute top-1/2 left-4 right-4 flex justify-between items-center pointer-events-none">
+                {/* Navigation buttons - Only show when needed */}
+                <div className="absolute top-1/2 -translate-y-1/2 w-full flex justify-between px-4 pointer-events-none">
                     {currentIndex > 0 && (
                         <button
                             onClick={handlePrev}
@@ -183,7 +184,8 @@ const MediaModal = ({ src, onClose, photos, onNavigate }) => {
                             <ChevronLeft className="w-8 h-8" />
                         </button>
                     )}
-                    {currentIndex < photos.length - 1 && (
+                    <div className="flex-1" /> {/* Spacer */}
+                    {currentIndex < (photos?.length ?? 0) - 1 && (
                         <button
                             onClick={handleNext}
                             className="pointer-events-auto p-2 rounded-full bg-black/50 text-white hover:text-gray-300 transition-colors"
@@ -194,7 +196,7 @@ const MediaModal = ({ src, onClose, photos, onNavigate }) => {
                 </div>
 
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
-                    {currentIndex + 1} / {photos.length}
+                    {currentIndex + 1} / {photos?.length}
                 </div>
             </div>
         </motion.div>,

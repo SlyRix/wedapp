@@ -34,8 +34,7 @@ const allowedOrigins = [
     'https://engagement-photos.slyrix.com',
 
 ];
-app.use('/api/uploads', express.static(UPLOADS_DIR));
-app.use('/api/thumbnails', express.static(THUMBNAILS_DIR));
+
 
 // Make sure the directories exist on startup
 const ensureDirectories = async () => {
@@ -99,7 +98,18 @@ const generateImageThumbnail = async (inputPath, outputPath) => {
                 fit: 'cover',
                 position: 'center'
             })
-            .jpeg({quality: 80})
+            // Use progressive loading
+            .jpeg({
+                quality: 60,
+                progressive: true,
+                optimizeScans: true
+            })
+            // Add output formats
+            .toFormat('jpeg', {
+                mozjpeg: true, // Use mozjpeg for better compression
+                chromaSubsampling: '4:2:0' // Better compression with minimal quality loss
+            })
+            .withMetadata() // Preserve metadata
             .toFile(outputPath);
 
         return true;
@@ -119,8 +129,29 @@ const generateVideoThumbnail = async (inputPath, outputPath) => {
                 size: '300x300'
             })
             .on('end', () => {
-                console.log('Video thumbnail generated successfully');
-                resolve(true);
+                // Optimize the video thumbnail using sharp
+                sharp(outputPath)
+                    .jpeg({
+                        quality: 60,
+                        progressive: true,
+                        optimizeScans: true
+                    })
+                    .toFormat('jpeg', {
+                        mozjpeg: true,
+                        chromaSubsampling: '4:2:0'
+                    })
+                    .toFile(outputPath + '.tmp')
+                    .then(() => {
+                        // Replace original with optimized version
+                        fs.rename(outputPath + '.tmp', outputPath, () => {
+                            console.log('Video thumbnail generated and optimized successfully');
+                            resolve(true);
+                        });
+                    })
+                    .catch(err => {
+                        console.error('Error optimizing video thumbnail:', err);
+                        resolve(true); // Still resolve as we have the original thumbnail
+                    });
             })
             .on('error', (err) => {
                 console.error('Error generating video thumbnail:', err);
@@ -128,6 +159,19 @@ const generateVideoThumbnail = async (inputPath, outputPath) => {
             });
     });
 };
+const cacheControl = (req, res, next) => {
+    // For thumbnails
+    if (req.url.startsWith('/api/thumbnails/')) {
+        res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    }
+    // For full-size images
+    else if (req.url.startsWith('/api/uploads/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, stale-while-revalidate=86400');
+    }
+    next();
+};
+app.use('/api/thumbnails', cacheControl, express.static(THUMBNAILS_DIR));
+app.use('/api/uploads', cacheControl, express.static(UPLOADS_DIR));
 const handleFileUpload = async (file) => {
     const thumbnailFilename = `thumb_${file.filename}`;
     const thumbnailPath = join(THUMBNAILS_DIR, thumbnailFilename);
@@ -136,7 +180,7 @@ const handleFileUpload = async (file) => {
     let thumbnailGenerated = false;
 
     try {
-        // Add console.log to debug file type
+        // Add debug logging
         console.log('Processing file:', {
             filename: file.filename,
             mimetype: file.mimetype,
@@ -144,19 +188,29 @@ const handleFileUpload = async (file) => {
         });
 
         if (file.mimetype.startsWith('image/')) {
-            // Handle image thumbnails
-            thumbnailGenerated = await generateImageThumbnail(
-                originalPath,
-                thumbnailPath
-            );
-            console.log('Image thumbnail generated:', thumbnailGenerated);
+            // Handle image thumbnails with retries
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    thumbnailGenerated = await generateImageThumbnail(originalPath, thumbnailPath);
+                    if (thumbnailGenerated) break;
+                } catch (err) {
+                    console.error(`Thumbnail generation attempt ${attempt} failed:`, err);
+                    if (attempt === 3) throw err;
+                }
+            }
         } else if (file.mimetype.startsWith('video/')) {
-            // Handle video thumbnails
-            thumbnailGenerated = await generateVideoThumbnail(
-                originalPath,
-                thumbnailPath
-            );
-            console.log('Video thumbnail generated:', thumbnailGenerated);
+            thumbnailGenerated = await generateVideoThumbnail(originalPath, thumbnailPath);
+        }
+
+        // Verify thumbnail was created
+        if (thumbnailGenerated) {
+            try {
+                await fs.access(thumbnailPath);
+                console.log('Thumbnail verified:', thumbnailPath);
+            } catch (err) {
+                console.error('Thumbnail verification failed:', err);
+                thumbnailGenerated = false;
+            }
         }
 
         return {
@@ -165,7 +219,7 @@ const handleFileUpload = async (file) => {
             mediaType: file.mimetype.startsWith('video/') ? 'video' : 'image'
         };
     } catch (error) {
-        console.error('Error generating thumbnail:', error);
+        console.error('Error in handleFileUpload:', error);
         return {
             ...file,
             thumbnailPath: null,
@@ -173,7 +227,6 @@ const handleFileUpload = async (file) => {
         };
     }
 };
-
 // Multer configuration
 const storage = multer.diskStorage({
     destination: async (req, file, cb) => {
@@ -675,16 +728,18 @@ app.get('/api/photos', async (req, res) => {
     try {
         const { uploadedBy } = req.query;
         let query = `
-            SELECT photos.*,
-                   CASE 
-                       WHEN uploadType = 'Challenge' 
-                       THEN challengeTitle 
-                       ELSE NULL 
-                   END as challengeInfo,
-                   deviceInfo as uploadDevice,
-                   thumbnailPath,
-                   mediaType
+            SELECT
+                photos.*,
+                CASE
+                    WHEN uploadType = 'Challenge'
+                        THEN challengeTitle
+                    ELSE NULL
+                    END as challengeInfo,
+                deviceInfo as uploadDevice,
+                thumbnailPath,
+                mediaType
             FROM photos`;
+
         let params = [];
 
         if (uploadedBy) {
@@ -695,7 +750,16 @@ app.get('/api/photos', async (req, res) => {
         query += ' ORDER BY uploadDate DESC';
         const photos = await db.all(query, params);
 
-        const formattedPhotos = photos.map(photo => {
+        // Debug thumbnail paths
+        console.log('First photo thumbnail info:', {
+            path: photos[0]?.thumbnailPath,
+            exists: photos[0]?.thumbnailPath ?
+                await fs.access(join(THUMBNAILS_DIR, photos[0].thumbnailPath))
+                    .then(() => true)
+                    .catch(() => false) : false
+        });
+
+        const formattedPhotos = await Promise.all(photos.map(async photo => {
             let metadata = {};
             try {
                 metadata = typeof photo.description === 'string'
@@ -705,15 +769,31 @@ app.get('/api/photos', async (req, res) => {
                 console.error('Error parsing metadata:', e);
             }
 
+            // Verify thumbnail existence
+            let thumbnailExists = false;
+            if (photo.thumbnailPath) {
+                thumbnailExists = await fs.access(join(THUMBNAILS_DIR, photo.thumbnailPath))
+                    .then(() => true)
+                    .catch(() => false);
+            }
+
             return {
                 ...photo,
                 name: photo.filename,
                 challengeInfo: photo.challengeInfo,
                 deviceInfo: photo.uploadDevice,
-                thumbnailPath: photo.thumbnailPath || null,
-                mediaType: photo.mediaType || 'image'
+                thumbnailPath: thumbnailExists ? photo.thumbnailPath : null,
+                mediaType: photo.mediaType || 'image',
+                thumbnailUrl: thumbnailExists ?
+                    `/api/thumbnails/${photo.thumbnailPath}` : null,
+                fullImageUrl: `/api/uploads/${photo.filename}`
             };
-        });
+        }));
+
+        // Add debug headers
+        res.setHeader('X-Thumbnail-Count',
+            formattedPhotos.filter(p => p.thumbnailPath).length);
+        res.setHeader('X-Total-Photos', formattedPhotos.length);
 
         res.json(formattedPhotos);
     } catch (error) {
