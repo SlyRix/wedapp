@@ -111,23 +111,15 @@ const generateImageThumbnail = async (inputPath, outputPath) => {
 
 const generateVideoThumbnail = async (inputPath, outputPath) => {
     return new Promise((resolve, reject) => {
-        // Make sure the output path ends with .jpg
-        const jpgOutputPath = outputPath.replace(/\.[^/.]+$/, '.jpg');
-
         ffmpeg(inputPath)
             .screenshots({
-                timestamps: ['1'],    // Take thumbnail at 1 second
-                filename: path.basename(jpgOutputPath),
-                folder: path.dirname(jpgOutputPath),
-                size: '300x300',
-                format: 'jpg'        // Explicitly set the output format to jpg
+                timestamps: ['1'], // Take thumbnail from 1 second in
+                filename: path.basename(outputPath),
+                folder: path.dirname(outputPath),
+                size: '300x300'
             })
-            .outputOptions([
-                '-frames:v', '1',     // Only take one frame
-                '-q:v', '2'          // High quality (2 is very good, 31 is worst)
-            ])
             .on('end', () => {
-                console.log('Video thumbnail generated successfully:', jpgOutputPath);
+                console.log('Video thumbnail generated successfully');
                 resolve(true);
             })
             .on('error', (err) => {
@@ -136,31 +128,30 @@ const generateVideoThumbnail = async (inputPath, outputPath) => {
             });
     });
 };
-
-// Update the handleFileUpload function to use .jpg extension for video thumbnails
 const handleFileUpload = async (file) => {
-    // For videos, use .jpg extension for thumbnail
-    const thumbnailExt = file.mimetype.startsWith('video/') ? '.jpg' : path.extname(file.filename);
-    const thumbnailFilename = `thumb_${path.basename(file.filename, path.extname(file.filename))}${thumbnailExt}`;
+    const thumbnailFilename = `thumb_${file.filename}`;
     const thumbnailPath = join(THUMBNAILS_DIR, thumbnailFilename);
     const originalPath = join(UPLOADS_DIR, file.filename);
 
     let thumbnailGenerated = false;
 
     try {
+        // Add console.log to debug file type
         console.log('Processing file:', {
             filename: file.filename,
             mimetype: file.mimetype,
-            thumbnailPath: thumbnailPath
+            size: file.size
         });
 
         if (file.mimetype.startsWith('image/')) {
+            // Handle image thumbnails
             thumbnailGenerated = await generateImageThumbnail(
                 originalPath,
                 thumbnailPath
             );
             console.log('Image thumbnail generated:', thumbnailGenerated);
         } else if (file.mimetype.startsWith('video/')) {
+            // Handle video thumbnails
             thumbnailGenerated = await generateVideoThumbnail(
                 originalPath,
                 thumbnailPath
