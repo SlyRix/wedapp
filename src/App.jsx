@@ -10,8 +10,6 @@ import ChallengeLeaderboard from './components/ChallengeLeaderboard';
 import ChallengeInteractions from './components/ChallengeInteractions';
 import { EllipsisVertical, Trash, Play} from 'lucide-react'; // Or the appropriate icon
 import MediaModal from "./components/MediaModal";
-import { useLoading, usePhotoLoading } from './components/LoadingProvider';
-
 // import DeleteConfirmModal from './components/DeleteConfirmModal'; // Adjust the import path if needed
 
 import { createPortal } from 'react-dom';
@@ -168,8 +166,6 @@ function App() {
     const [challengeVoteStatus, setChallengeVoteStatus] = useState({});
     const [photoToDelete, setPhotoToDelete] = useState(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const { LoadingIndicator, PhotoSkeleton, LeaderboardSkeleton } = useLoading();
-    const { isLoading: isGeneralLoading, fetchPhotosWithLoading } = usePhotoLoading();
 
     const [adminStats, setAdminStats] = useState({
         totalUploads: 0,
@@ -181,7 +177,7 @@ function App() {
 
     useEffect(() => {
         if (isLoggedIn) {
-            fetchPhotosWithLoading(fetchPhotos);
+            fetchPhotos();
             challenges.forEach(challenge => {
                 fetchChallengePhotos(challenge.id);
             });
@@ -204,10 +200,6 @@ function App() {
         if (/MSIE|Trident/i.test(userAgent)) return 'Internet Explorer';
         return 'Unknown Browser';
     };
-    const challengeLoadingHooks = {};
-    challenges.forEach(challenge => {
-        challengeLoadingHooks[challenge.id] = usePhotoLoading(challenge.id);
-    });
     const handleAddComment = async (photoId, comment) => {
         try {
             // Here you would typically make an API call to save the comment
@@ -737,49 +729,48 @@ function App() {
         }));
     };
     const fetchChallengePhotos = async (challengeId) => {
-        const { fetchPhotosWithLoading } = challengeLoadingHooks[challengeId];
-
-        await fetchPhotosWithLoading(async () => {
-            try {
-                const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
-                if (!response.ok) {
-                    throw new Error('Failed to fetch challenge photos');
-                }
-                const data = await response.json();
-                setChallengePhotos(prev => ({
-                    ...prev,
-                    [challengeId]: data
-                }));
-
-                setCompletedChallenges(prevCompleted => {
-                    const newCompleted = new Set(prevCompleted);
-                    if (data.some(photo => photo.uploadedBy === guestName)) {
-                        newCompleted.add(challengeId);
-                    } else {
-                        newCompleted.delete(challengeId);
-                    }
-                    return newCompleted;
-                });
-            } catch (error) {
-                console.error('Error fetching challenge photos:', error);
-                setNotification({
-                    message: 'Error loading challenge photos',
-                    type: 'error'
-                });
+        try {
+            const response = await fetch(`${API_URL}/challenge-photos/${challengeId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch challenge photos');
             }
-        });
-    };
+            const data = await response.json();
+            setChallengePhotos(prev => ({
+                ...prev,
+                [challengeId]: data
+            }));
 
+            setCompletedChallenges(prevCompleted => {
+                const newCompleted = new Set(prevCompleted);
+                if (data.some(photo => photo.uploadedBy === guestName)) {
+                    newCompleted.add(challengeId);
+                } else {
+                    newCompleted.delete(challengeId);
+                }
+                return newCompleted;
+            });
+        } catch (error) {
+            console.error('Error fetching challenge photos:', error);
+            setNotification({
+                message: 'Error loading challenge photos',
+                type: 'error'
+            });
+        }
+    };
     const fetchPhotos = async (isAdminFetch = false) => {
+        setLoading(true);
         try {
             const url = (isAdminFetch || isAdmin)
                 ? `${API_URL}/photos`
                 : `${API_URL}/photos?uploadedBy=${encodeURIComponent(guestName)}`;
 
+            console.log('Fetching photos from:', url);
+
             const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to fetch photos');
 
             const data = await response.json();
+            console.log('Received photos:', data.length);
 
             if (isAdminFetch || isAdmin) {
                 setAllPhotos(data);
@@ -793,6 +784,8 @@ function App() {
                 message: 'Error loading photos. Please try again.',
                 type: 'error'
             });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -1236,7 +1229,7 @@ function App() {
                     >
                         <Calendar className="w-5 h-5"/>
                         <p className="font-['Great_Vibes'] text-2xl">
-                        10th November 2024
+                            10th November 2024
                         </p>
                     </motion.div>
 
@@ -1378,7 +1371,6 @@ function App() {
         return (
             <div className="max-w-4xl mx-auto space-y-4">
                 {challenges.map((challenge) => {
-                    const { isLoading } = challengeLoadingHooks[challenge.id];
                     const hasUploadedPhoto = challengePhotos[challenge.id]?.some(
                         photo => photo.uploadedBy === guestName
                     ) && !challenge.isPrivate;
@@ -1398,19 +1390,14 @@ function App() {
                             }
                         }));
                     };
-
                     const ChallengeMediaViewer = ({
                                                       challenge,
                                                       photos,
                                                       onMediaClick,
                                                       isCompleted,
                                                       isPrivate,
-                                                      guestName,
-                                                      onVoteChange, // Add this prop
-                                                      challengeVoteStatus // Add this prop
+                                                      guestName
                                                   }) => {
-                        const API_URL = 'https://engagement-photos-api.slyrix.com/api';
-
                         return (
                             <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {photos.map((photo) => (
@@ -1436,6 +1423,18 @@ function App() {
                                                             <Play className="w-6 h-6 text-white" />
                                                         </div>
                                                     </div>
+
+                                                    <video
+                                                        src={`${API_URL}/uploads/${photo.filename}`}
+                                                        className="w-full h-full object-cover"
+                                                        preload="metadata"
+                                                        muted
+                                                        playsInline
+                                                        onLoadedMetadata={(e) => {
+                                                            e.target.currentTime = 0;
+                                                            e.target.pause();
+                                                        }}
+                                                    />
                                                 </div>
                                             ) : (
                                                 <OptimizedImage
@@ -1458,8 +1457,8 @@ function App() {
                                                 currentUser={guestName}
                                                 challengeId={challenge.id}
                                                 uploadedBy={photo.uploadedBy}
-                                                onVoteChange={onVoteChange} // Pass through the callback
-                                                votedPhotoId={challengeVoteStatus?.[challenge.id]?.votedPhotoId}
+                                                onVoteChange={handleVoteUpdate}
+                                                votedPhotoId={challengeVoteStatus[challenge.id]?.votedPhotoId}
                                             />
                                         </div>
                                     </div>
@@ -1467,7 +1466,6 @@ function App() {
                             </div>
                         );
                     };
-
 
                     return (
                         <div
@@ -1498,16 +1496,12 @@ function App() {
                             {/* Leaderboard Section */}
                             {!challenge.isPrivate && (
                                 <div className="px-4 sm:px-6">
-                                    {isLoading ? (
-                                        <LeaderboardSkeleton />
-                                    ) : (
-                                        <ChallengeLeaderboard
-                                            challengeId={challenge.id}
-                                            challengeTitle={challenge.title}
-                                            challengePhotos={challengePhotos[challenge.id] || []}
-                                            guestName={guestName}
-                                        />
-                                    )}
+                                    <ChallengeLeaderboard
+                                        challengeId={challenge.id}
+                                        challengeTitle={challenge.title}
+                                        challengePhotos={challengePhotos[challenge.id] || []}
+                                        guestName={guestName}
+                                    />
                                 </div>
                             )}
 
@@ -1645,11 +1639,9 @@ function App() {
                     </div>
                 </div>
 
-                {isGeneralLoading ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
-                        {[...Array(6)].map((_, i) => (
-                            <PhotoSkeleton key={i} />
-                        ))}
+                {loading ? (
+                    <div className="text-center py-4 sm:py-8">
+                        <p className="text-wedding-purple-light italic">Loading moments...</p>
                     </div>
                 ) : photosToDisplay.length === 0 ? (
                     <div className="text-center py-4 sm:py-8">
