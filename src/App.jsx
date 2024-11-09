@@ -1408,13 +1408,17 @@ function App() {
                                         >
                                             {photo.mediaType === 'video' ? (
                                                 <div className="relative w-full h-full">
-                                                    {/* Video thumbnail container */}
+                                                    <OptimizedImage
+                                                        src={`${API_URL}/uploads/${photo.filename}`}
+                                                        alt={`Video by ${photo.uploadedBy}`}
+                                                        mediaType="video"
+                                                        className="w-full h-full object-cover"
+                                                        thumbnailPath={photo.thumbnailPath}
+                                                    />
+                                                    <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                                                        {photo.filename.toLowerCase().endsWith('.mov') ? 'MOV' : 'MP4'}
+                                                    </div>
                                                     <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
-                                                        <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                                                            {photo.filename.toLowerCase().endsWith('.mov') ? 'MOV' : 'MP4'}
-                                                        </div>
-
-                                                        {/* Play button overlay */}
                                                         <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
                                                             <Play className="w-6 h-6 text-white" />
                                                         </div>
@@ -1433,10 +1437,11 @@ function App() {
                                                     />
                                                 </div>
                                             ) : (
-                                                <img
+                                                <OptimizedImage
                                                     src={`${API_URL}/uploads/${photo.filename}`}
-                                                    alt={`By ${photo.uploadedBy}`}
+                                                    alt={`Photo by ${photo.uploadedBy}`}
                                                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                    thumbnailPath={photo.thumbnailPath}
                                                 />
                                             )}
 
