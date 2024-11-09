@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Crown, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
+import OptimizedImage from './OptimizedImage';
 
 // Simple in-memory cache for leaderboard data
 const leaderboardCache = new Map();
@@ -157,13 +158,14 @@ const ChallengeLeaderboard = ({
                             className="flex flex-col items-center"
                         >
                             <div className={`relative ${posInfo.bgColor} border-2 ${posInfo.borderColor} 
-                rounded-lg p-1 shadow-sm ${position === 0 ? '-mb-0' : ''}`}
+                                rounded-lg p-1 shadow-sm ${position === 0 ? '-mb-0' : ''}`}
                             >
-                                <img
+                                <OptimizedImage
                                     src={`${API_URL}/uploads/${photo.filename}`}
+                                    thumbnailPath={photo.thumbnailPath}
                                     alt={`Photo by ${photo.uploadedBy}`}
                                     className={`${posInfo.size} object-cover rounded-md`}
-                                    loading="lazy"
+                                    mediaType={photo.mediaType || 'image'}
                                 />
                                 <div className="absolute -top-2 -right-2">
                                     {posInfo.icon}
